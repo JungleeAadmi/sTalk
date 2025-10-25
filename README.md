@@ -204,8 +204,20 @@ sudo systemctl status stalk
 - *Secure password change functionality*
 
 ### Mobile browser - New conversation
-![New Conversation](screenshots/Mobile preview/new-conversation.jpeg)
+![New Conversation](screenshots/new-conversation.jpeg)
 - *Mobile browser chat screen*
+
+### attachment options
+![Attachments](screenshots/attachment-options.jpeg)
+- *how to attach files and share securely*
+
+### Mobile browser - welcome screen/users list
+![User Lists](screenshots/main-screen.jpeg)
+- *List of users in this hosted version, anyone can message any user*
+
+### Mobile browser - Chat bubble features
+![Chat Bubble](screenshots/chat-bubble.jpeg)
+- *chat bubble*
 
 ---
 
