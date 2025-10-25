@@ -203,6 +203,10 @@ sudo systemctl status stalk
 ![Change Password](screenshots/change-password.png)
 - *Secure password change functionality*
 
+### Mobile browser - New conversation
+![New Conversation](screenshots/Mobile preview/new-conversation.jpeg)
+- *Mobile browser chat screen*
+
 ---
 
 ## 🔧 Configuration
