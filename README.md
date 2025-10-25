@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![sTalk Logo](https://img.shields.io/badge/sTalk-2.0.0-blue.svg)
+![sTalk Logo](https://img.shields.io/badge/sTalk-1.0-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
