@@ -6,7 +6,7 @@
 ![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**sTalk is a fully self-hosted web application designed for private, encrypted texting and file sharing — built entirely by AI, with no human-written code.
+**sTalk is a self-hosted web application designed for private, encrypted texting and file sharing — built entirely by AI, with no human-written code.
 Host it on your own hardware to keep your conversations and data completely under your control.**
 
 [Features](#-features) • [Quick Install](#-quick-installation) • [Manual Setup](#-manual-installation) • [Screenshots](#-Screenshots) • [Documentation](#-documentation)
@@ -17,14 +17,12 @@ Host it on your own hardware to keep your conversations and data completely unde
 
 ## 📱 About sTalk
 
-sTalk is a production-ready, real-time communication platform designed for teams who need secure, fast, and reliable messaging. Built with Node.js and Socket.IO, it offers a seamless chat experience with file sharing capabilities, all wrapped in a beautiful mobile-first interface.
+sTalk is a production-ready, real-time communication platform 100% designed by AI for those need secure, fast, and reliable messaging app hosted on their own hardware. 
 
 **Perfect for:**
-- Small to medium-sized teams
-- Internal company communication
-- Project collaboration
+- Family and friends for private chats
 - Self-hosted messaging solutions
-- Privacy-conscious organizations
+- Privacy-conscious people
 
 ---
 
@@ -32,7 +30,7 @@ sTalk is a production-ready, real-time communication platform designed for teams
 
 ### 🚀 Core Functionality
 - **Real-time Messaging** - Instant message delivery powered by Socket.IO
-- **File Sharing** - Share images, audio, video, documents up to 50MB
+- **File Sharing** - Share images, audio, video, documents
 - **User Authentication** - Secure JWT-based authentication system
 - **Online Status** - See who's online in real-time
 - **Typing Indicators** - Know when someone is typing
@@ -44,7 +42,7 @@ sTalk is a production-ready, real-time communication platform designed for teams
 - **User Search** - Quickly find and message team members
 
 ### 🎨 User Interface
-- **Dark/Light Mode** - Toggle between themes for comfortable viewing
+- **Dark/Light Mode** - MUST - Toggle between themes for comfortable viewing
 - **Mobile-First Design** - Optimized for mobile devices with responsive layout
 - **Long-Press Actions** - Reply, copy, or delete messages with long-press
 - **Swipe Gestures** - Intuitive swipe navigation
@@ -135,7 +133,7 @@ sudo nano /etc/systemd/system/stalk.service
 Add the following content (adjust paths as needed):
 ```ini
 [Unit]
-Description=sTalk - Team Communication Platform
+Description=sTalk
 After=network.target
 
 [Service]
@@ -175,35 +173,35 @@ sudo systemctl status stalk
 
 ### Admin Only - Password Generation
 ![Password Generation](screenshots/admin-password-generation.png)
-*Admin can generate secure temporary passwords for users*
+- *Admin can generate secure temporary passwords for users*
 
 ### Admin Only - User Management
 ![User Management](screenshots/admin-user-management.png)
-*Complete user management dashboard for administrators*
+- *Complete user management dashboard for administrators*
 
 ### Admin Only - System Statistics
 ![System Statistics](screenshots/admin-stats.png)
-*View detailed system statistics and usage metrics*
+- *View detailed system statistics and usage metrics*
 
 ### Create Admin User
 ![Create Admin](screenshots/create-admin.png)
-*Easy admin user creation during setup*
+- *Easy admin user creation during setup*
 
 ### Dark Mode Toggle
 ![Dark Mode](screenshots/dark-mode.png)
-*Comfortable dark mode for low-light environments*
+- *Comfortable dark mode for low-light environments*
 
 ### Delete User
 ![Delete User](screenshots/delete-user.png)
-*Safe user deletion with confirmation*
+- *Safe user deletion with confirmation*
 
 ### Profile Picture Options
 ![Profile Pictures](screenshots/profile-picture.png)
-*Customize your profile with images or avatars*
+- *Customize your profile with images or avatars*
 
 ### Change Password
 ![Change Password](screenshots/change-password.png)
-*Secure password change functionality*
+- *Secure password change functionality*
 
 ---
 
