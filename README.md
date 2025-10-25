@@ -9,7 +9,7 @@
 **sTalk is a fully self-hosted web application designed for private, encrypted texting and file sharing — built entirely by AI, with no human-written code.
 Host it on your own hardware to keep your conversations and data completely under your control.**
 
-[Features](#-features) • [Quick Install](#-quick-installation) • [Manual Setup](#-manual-installation) • [Screenshots](#-screenshots) • [Documentation](#-documentation)
+[Features](#-features) • [Quick Install](#-quick-installation) • [Manual Setup](#-manual-installation) • [Screenshots](#-Screenshots) • [Documentation](#-documentation)
 
 </div>
 
