@@ -6,7 +6,8 @@
 ![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**A modern, mobile-first team communication platform with real-time messaging and file sharing**
+**sTalk is a fully self-hosted web application designed for private, encrypted texting and file sharing — built entirely by AI, with no human-written code.
+Host it on your own hardware to keep your conversations and data completely under your control.**
 
 [Features](#-features) • [Quick Install](#-quick-installation) • [Manual Setup](#-manual-installation) • [Screenshots](#-screenshots) • [Documentation](#-documentation)
 
