@@ -9,7 +9,7 @@
 **sTalk is a self-hosted web application designed for private, encrypted texting and file sharing — built entirely by AI, with no human-written code.
 Host it on your own hardware to keep your conversations and data completely under your control.**
 
-[Features](#-features) • [Quick Install](#-quick-installation) • [Manual Setup](#-manual-installation) • [Screenshots](#-Screenshots) • [Documentation](#-documentation)
+[Features](#-features) • [Quick Install](#-quick-installation) • [Screenshots](#-Screenshots) • [Documentation](#-documentation)
 
 </div>
 
@@ -95,80 +95,6 @@ The installer will automatically:
 ⚠️ **Important:** Change the admin password immediately after first login!
 
 ---
-
-## 📦 Manual Installation
-
-If you prefer to install manually or want more control:
-
-### Prerequisites
-- Node.js 16.0.0 or higher
-- npm 8.0.0 or higher
-- Git
-
-### Step 1: Clone the Repository
-```bash
-git clone https://github.com/JungleeAadmi/sTalk.git
-cd sTalk
-```
-
-### Step 2: Install Dependencies
-```bash
-npm install
-```
-
-### Step 3: Start the Application
-```bash
-npm start
-```
-
-The application will be available at `http://localhost:3000`
-
-### Step 4 (Optional): Set Up as a System Service
-
-Create a systemd service file:
-```bash
-sudo nano /etc/systemd/system/stalk.service
-```
-
-Add the following content (adjust paths as needed):
-```ini
-[Unit]
-Description=sTalk
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/sTalk
-ExecStart=/usr/bin/node /opt/sTalk/server.js
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=stalk
-
-# Environment variables (optional)
-Environment=NODE_ENV=production
-Environment=PORT=3000
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start the service:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable stalk
-sudo systemctl start stalk
-```
-
-Check status:
-```bash
-sudo systemctl status stalk
-```
-
----
-
 ## 🖼️ Screenshots
 
 ### Admin Only - Password Generation
