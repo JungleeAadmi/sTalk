@@ -81,7 +81,12 @@ wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh |
 ```
 wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/uninstall.sh | sudo bash
 ```
+### If wish to remove the whole thing
 
+```
+sudo rm -rf /opt/stalk && sudo rm -f /etc/systemd/system/stalk.service && sudo systemctl daemon-reload && echo "Removed /opt/stalk and systemd unit"
+
+```
 The installer will automatically:
 ✅ Detect your operating system  
 ✅ Install Node.js and npm (if not present)  
