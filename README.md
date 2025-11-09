@@ -77,6 +77,11 @@ curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh 
 wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh | sudo bash
 ```
 
+### Uninstall:
+```
+wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/uninstall.sh | sudo bash
+```
+
 The installer will automatically:
 ✅ Detect your operating system  
 ✅ Install Node.js and npm (if not present)  
