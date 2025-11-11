@@ -1,11 +1,13 @@
 {
   "name": "sTalk",
   "short_name": "sTalk",
-  "description": "Mobile-first team communication with file sharing",
+  "description": "Modern self-hosted chat app for teams with file sharing and real-time messaging.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1e293b",
   "theme_color": "#1e293b",
+  "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -15,6 +17,26 @@
     {
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/mstile-144x144.png",
+      "sizes": "144x144",
       "type": "image/png"
     }
   ]
