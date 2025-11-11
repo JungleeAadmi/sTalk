@@ -79,7 +79,8 @@ wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh |
 
 ### Uninstall:
 ```
-wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/uninstall.sh | sudo bash
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/uninstall.sh)"
+
 ```
 ### If wish to remove the whole thing
 
