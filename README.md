@@ -76,6 +76,14 @@ curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh 
 ```bash
 wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh | sudo bash
 ```
+### Update / Upgrade sTalk
+
+This command updates the application code while preserving the database and uploads. It creates backups under `/root` before updating.
+
+```bash
+# Preferred (runs update.sh from the repo via sudo)
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/update.sh)"
+```
 
 ### Uninstall:
 ```
