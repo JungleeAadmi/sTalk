@@ -5,7 +5,7 @@
 
 set -e
 
-APP_DIR="/opt/stalk"
+APP_DIR="/opt/sTalk"
 SERVICE_NAME="stalk"
 DB_PATH="$APP_DIR/database/stalk.db"
 UPLOADS_PATH="$APP_DIR/uploads"
