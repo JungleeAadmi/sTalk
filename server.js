@@ -1,3 +1,4 @@
+// server.js (sTalk) - full with Web Push support integrated
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
@@ -12,6 +13,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const mime = require('mime-types');
+const webpush = require('web-push');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +34,17 @@ const UPLOAD_PATH = process.env.UPLOAD_PATH || './uploads';
 const PROFILE_PATH = process.env.PROFILE_PATH || './uploads/profiles';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// VAPID / web-push config
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+    console.warn('⚠️ VAPID keys not configured. Push will be disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set.');
+}
+
 // Ensure required directories exist
 [path.dirname(DB_PATH), UPLOAD_PATH, path.join(UPLOAD_PATH, 'files'), 
  path.join(UPLOAD_PATH, 'images'), path.join(UPLOAD_PATH, 'audio'),
@@ -43,7 +56,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Enhanced security middleware
 app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP to allow file uploads
+    contentSecurityPolicy: false, // Disable CSP to allow file uploads/service-worker etc.
     crossOriginEmbedderPolicy: false
 }));
 
@@ -152,7 +165,7 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: NODE_ENV,
-        features: ['file-upload', 'real-time-chat', 'profile-management', 'dark-theme', 'user-management']
+        features: ['file-upload', 'real-time-chat', 'profile-management', 'dark-theme', 'user-management', 'push-notifications']
     });
 });
 
@@ -231,6 +244,18 @@ function initializeTables() {
             mime_type TEXT NOT NULL,
             uploaded_by TEXT NOT NULL,
             upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Push subscriptions table (web-push)
+        db.run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT,
+            auth TEXT,
+            ua TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )`, (err) => {
             if (err) reject(err);
             else {
@@ -318,6 +343,38 @@ function generateTempPassword() {
         password += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return password;
+}
+
+// Web-push helper: sends push notifications to a given user id (numeric)
+async function sendPushToUser(userId, payload) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        console.warn('VAPID keys missing, skipping push.');
+        return;
+    }
+
+    return new Promise((resolve) => {
+        db.all('SELECT * FROM push_subscriptions WHERE user_id = ?', [userId], async (err, rows) => {
+            if (err || !rows || rows.length === 0) return resolve();
+            const promises = rows.map(async (r) => {
+                const sub = {
+                    endpoint: r.endpoint,
+                    keys: { p256dh: r.p256dh, auth: r.auth }
+                };
+                try {
+                    await webpush.sendNotification(sub, JSON.stringify(payload));
+                } catch (e) {
+                    const status = e && e.statusCode ? e.statusCode : null;
+                    // Remove stale subscriptions (410 Gone or 404 Not Found)
+                    if (status === 410 || status === 404) {
+                        db.run('DELETE FROM push_subscriptions WHERE id = ?', [r.id]);
+                    }
+                }
+            });
+
+            try { await Promise.all(promises); } catch (e) {}
+            resolve();
+        });
+    });
 }
 
 // Authentication routes
@@ -556,7 +613,7 @@ app.post('/api/chats/:otherUserId/messages', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'Message content or file required' });
     }
 
-    db.get('SELECT username FROM users WHERE id = ?', [otherUserId], (err, otherUser) => {
+    db.get('SELECT username, id FROM users WHERE id = ?', [otherUserId], (err, otherUser) => {
         if (err || !otherUser) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -616,9 +673,65 @@ app.post('/api/chats/:otherUserId/messages', authenticateToken, (req, res) => {
                 io.to(`user_${req.user.id}`).emit('message_sent', responseData);
                 io.to(`user_${otherUserId}`).emit('message_received', responseData);
 
+                // Build push payload and send to recipient
+                const pushPayload = {
+                  title: `${responseData.senderName} • sTalk`,
+                  body: responseData.content ? responseData.content.substring(0, 120) : (responseData.fileName ? `Sent: ${responseData.fileName}` : 'New message'),
+                  data: { chatId: responseData.chatId, sender: responseData.sender, url: `/chats/${responseData.chatId}` },
+                  tag: `chat-${responseData.chatId}`
+                };
+
+                // recipientId from route parameter (ensure numeric)
+                const recipientNumericId = parseInt(otherUserId, 10);
+                if (!isNaN(recipientNumericId)) {
+                  sendPushToUser(recipientNumericId, pushPayload).catch(()=>{});
+                }
+
                 res.json(responseData);
             });
         });
+    });
+});
+
+// Return VAPID public key to clients
+app.get('/api/push/key', (req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY || '' });
+});
+
+// Subscribe (save subscription for logged in user)
+app.post('/api/push/subscribe', authenticateToken, (req, res) => {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint) {
+        return res.status(400).json({ error: 'Invalid subscription' });
+    }
+    const endpoint = subscription.endpoint;
+    const p256dh = subscription.keys ? subscription.keys.p256dh : null;
+    const auth = subscription.keys ? subscription.keys.auth : null;
+    const ua = req.headers['user-agent'] || null;
+
+    db.get('SELECT id FROM push_subscriptions WHERE endpoint = ?', [endpoint], (err, row) => {
+        if (err) return res.status(500).json({ error: 'Database error' });
+        if (row) {
+            db.run('UPDATE push_subscriptions SET user_id = ?, p256dh = ?, auth = ?, ua = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+                   [req.user.id, p256dh, auth, ua, row.id]);
+            return res.json({ message: 'Subscription updated' });
+        } else {
+            db.run('INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, ua) VALUES (?, ?, ?, ?, ?)',
+                   [req.user.id, endpoint, p256dh, auth, ua], function(err) {
+                if (err) return res.status(500).json({ error: 'Failed to save subscription' });
+                return res.json({ message: 'Subscription saved' });
+            });
+        }
+    });
+});
+
+// Unsubscribe (remove subscription)
+app.post('/api/push/unsubscribe', authenticateToken, (req, res) => {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint required' });
+    db.run('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?', [endpoint, req.user.id], function(err) {
+        if (err) return res.status(500).json({ error: 'Failed to remove subscription' });
+        res.json({ message: 'Unsubscribed' });
     });
 });
 
@@ -1018,7 +1131,7 @@ async function startApp() {
             console.log(`📁 Uploads: ${UPLOAD_PATH}`);
             console.log(`🖼️  Profiles: ${PROFILE_PATH}`);
             console.log(`🌍 Environment: ${NODE_ENV}`);
-            console.log(`✨ Features: Dark Theme, File Upload, Profile Management, Admin User Management`);
+            console.log(`✨ Features: Dark Theme, File Upload, Profile Management, Admin User Management, Push Notifications`);
             console.log(`\n✅ Production ready with full admin controls!`);
         });
     } catch (error) {
