@@ -161,8 +161,10 @@
             background: var(--surface);
             color: var(--text-primary);
             transition: all 0.2s ease;
-            -webkit-appearance: none;
-        }
+            appearance: none;
+            -webkit-appearance: none; /* keeps Safari/iOS happy */
+}
+
 
         .form-input:focus {
             outline: none;
@@ -183,6 +185,7 @@
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
+            appearance: none;
             -webkit-appearance: none;
         }
 
