@@ -8,6 +8,11 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1e293b">
 
+    <!-- Apple PWA / iOS meta (helps "Open as Web App") -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="sTalk">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <style>
         * {
             margin: 0;
@@ -65,6 +70,24 @@
             -moz-osx-font-smoothing: grayscale;
             overflow-x: hidden;
             transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /*
+         Mobile polish block: improves PWA / home-screen behavior on iOS/Android:
+         - prevents overscroll bounce where useful
+         - disables automatic text-size adjustments on input focus
+         - improves tap responsiveness and removes tap highlight
+         - ensures form controls inherit font for consistent layout
+        */
+        html, body {
+            overscroll-behavior: none;
+            -webkit-text-size-adjust: 100%;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        input, textarea, button, select {
+            font: inherit;
         }
 
         /* Utility classes */
@@ -1368,7 +1391,7 @@
                 width: 100%;
                 height: 100%;
                 overflow: hidden;
-    
+            }
 
             /* Force input elements visible */
             #messageInputContainer .message-input,
@@ -1509,8 +1532,7 @@
                 visibility: visible !important;
                 opacity: 1 !important;
                 min-height: 60px !important;
-            }
-        }    
+            }    
         /* Mobile fixes */
         @media (max-width: 768px) {
             body {
