@@ -1383,7 +1383,7 @@
         .btn-secondary:hover {
             background: var(--surface-variant);
         }
-    
+
         /* Mobile Layout - Chat header replaces app header */
         @media (max-width: 768px) {
             html, body {
@@ -1392,7 +1392,7 @@
                 height: 100%;
                 overflow: hidden;
             }
-        
+
             /* Force input elements visible */
             #messageInputContainer .message-input,
             #messageInputContainer .input-actions,
@@ -1407,7 +1407,6 @@
                 display: flex !important;
             }
 
-        
             .app {
                 height: 100vh;
                 display: flex;
@@ -1532,9 +1531,10 @@
                 visibility: visible !important;
                 opacity: 1 !important;
                 min-height: 60px !important;
-            } 
-        }
-        /* Mobile fixes */
+            }
+        } /* end mobile media query */
+
+        /* Mobile fixes (extra safety block for very small viewports) */
         @media (max-width: 768px) {
             body {
                 overflow: hidden;
