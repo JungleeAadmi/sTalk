@@ -1,13 +1,13 @@
 #!/bin/bash
 
 ################################################################################
-# sTalk Installation Script
-# 
+# sTalk Installation Script (updated v3.0)
+#
 # This script automatically installs sTalk on Debian/Ubuntu-based systems
 # Usage: curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh | sudo bash
 ################################################################################
 
-set -e  # Exit on error
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -20,6 +20,9 @@ NC='\033[0m' # No Color
 STALK_DIR="/opt/sTalk"
 SERVICE_NAME="stalk"
 PORT=3000
+VAPID_FILE="${STALK_DIR}/.vapid.json"
+SYSTEMD_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
+SYSTEMD_VAPID_CONF="${SYSTEMD_DROPIN_DIR}/vapid.conf"
 
 ################################################################################
 # Helper Functions
@@ -29,7 +32,7 @@ print_header() {
     echo -e "${BLUE}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                                                               ║"
-    echo "║                    sTalk Installer v2.0.0                     ║"
+    echo "║                    sTalk Installer v3.0.0                     ║"
     echo "║          Mobile-first Team Communication Platform            ║"
     echo "║                                                               ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
@@ -115,8 +118,8 @@ install_nodejs() {
     print_step "Checking Node.js installation..."
     
     if command -v node &> /dev/null; then
-        NODE_VERSION=$(node -v | cut -d 'v' -f 2 | cut -d '.' -f 1)
-        if [ "$NODE_VERSION" -ge 16 ]; then
+        NODE_MAJOR=$(node -v | cut -d 'v' -f 2 | cut -d '.' -f 1)
+        if [ "$NODE_MAJOR" -ge 16 ]; then
             print_success "Node.js $(node -v) already installed"
             return
         else
@@ -162,12 +165,19 @@ install_git() {
 }
 
 ################################################################################
-# sTalk Installation
+# sTalk Installation (clone + deps)
 ################################################################################
 
 install_stalk() {
     print_step "Installing sTalk..."
     
+    # If existing install and it has VAPID, back it up before removing
+    BACKUP_VAPID="/tmp/stalk_vapid_backup.json"
+    if [ -d "$STALK_DIR" ] && [ -f "${STALK_DIR}/.vapid.json" ]; then
+        print_info "Found existing VAPID keys, backing up..."
+        cp -f "${STALK_DIR}/.vapid.json" "${BACKUP_VAPID}"
+    fi
+
     # Remove old installation if exists
     if [ -d "$STALK_DIR" ]; then
         print_info "Removing previous installation..."
@@ -182,10 +192,23 @@ install_stalk() {
     cd "$STALK_DIR"
     print_success "Repository cloned"
     
-    # Install dependencies
+    # Restore VAPID backup if present
+    if [ -f "${BACKUP_VAPID}" ]; then
+        print_info "Restoring previous VAPID keys..."
+        mv -f "${BACKUP_VAPID}" "${VAPID_FILE}"
+        chmod 600 "${VAPID_FILE}"
+        print_success "VAPID restored"
+    fi
+
+    # Install dependencies (production)
     print_step "Installing dependencies (this may take a few minutes)..."
     npm install --production --silent
     print_success "Dependencies installed"
+    
+    # Ensure web-push is available for npx usage (npx will auto-download but install ensures cache)
+    # install web-push locally (non-fatal)
+    print_step "Ensuring web-push helper available..."
+    npm install --no-save --silent web-push || true
     
     # Create necessary directories
     mkdir -p database uploads/files uploads/images uploads/audio uploads/documents uploads/profiles
@@ -193,7 +216,82 @@ install_stalk() {
     
     # Set permissions
     chmod -R 755 "$STALK_DIR"
+    # but keep VAPID file more restricted
+    [ -f "${VAPID_FILE}" ] && chmod 600 "${VAPID_FILE}"
     print_success "Permissions set"
+}
+
+################################################################################
+# VAPID Keys Generation & systemd drop-in
+################################################################################
+
+generate_vapid_and_configure_systemd() {
+    # Allow override of subject by environment variable INSTALL_VAPID_SUBJECT,
+    # otherwise default to admin@<hostname>
+    SUBJECT="${INSTALL_VAPID_SUBJECT:-mailto:admin@$(hostname -f 2>/dev/null || hostname)}"
+
+    # If .vapid.json already exists, don't regenerate
+    if [ -f "${VAPID_FILE}" ]; then
+        print_success "VAPID keys already present at ${VAPID_FILE} — leaving intact"
+    else
+        print_step "Generating VAPID keys for this instance..."
+        # Use npx to generate vapid keys and save to file
+        # the output is a JSON object: {"publicKey":"...","privateKey":"..."}
+        if command -v npx &> /dev/null; then
+            npx --yes web-push generate-vapid-keys --json > "${VAPID_FILE}"
+        else
+            # try local ./node_modules/.bin
+            if [ -f "./node_modules/.bin/web-push" ]; then
+                ./node_modules/.bin/web-push generate-vapid-keys --json > "${VAPID_FILE}"
+            else
+                # fallback: install temporarily then run
+                npm install --no-save --silent web-push
+                npx --yes web-push generate-vapid-keys --json > "${VAPID_FILE}"
+            fi
+        fi
+
+        if [ -f "${VAPID_FILE}" ]; then
+            chmod 600 "${VAPID_FILE}"
+            print_success "Generated VAPID keys and saved to ${VAPID_FILE}"
+        else
+            print_error "Failed to generate VAPID keys"
+            return 1
+        fi
+    fi
+
+    # Extract keys (safe parsing)
+    VAPID_PUBLIC=$(jq -r '.publicKey' "${VAPID_FILE}" 2>/dev/null || true)
+    VAPID_PRIVATE=$(jq -r '.privateKey' "${VAPID_FILE}" 2>/dev/null || true)
+
+    # If jq not present, try node to parse
+    if [ -z "$VAPID_PUBLIC" ] || [ -z "$VAPID_PRIVATE" ] || [ "$VAPID_PUBLIC" = "null" ]; then
+        if command -v node &> /dev/null; then
+            VAPID_PUBLIC=$(node -e "console.log(require('${VAPID_FILE}').publicKey)" 2>/dev/null || true)
+            VAPID_PRIVATE=$(node -e "console.log(require('${VAPID_FILE}').privateKey)" 2>/dev/null || true)
+        fi
+    fi
+
+    if [ -z "$VAPID_PUBLIC" ] || [ -z "$VAPID_PRIVATE" ]; then
+        print_error "Could not extract VAPID keys from ${VAPID_FILE}. Ensure file contains valid JSON."
+        return 1
+    fi
+
+    # Create systemd drop-in dir if not exists
+    mkdir -p "${SYSTEMD_DROPIN_DIR}"
+
+    # Write environment drop-in (quotes used for safety)
+    cat > "${SYSTEMD_VAPID_CONF}" <<EOF
+[Service]
+Environment=VAPID_PUBLIC_KEY="${VAPID_PUBLIC}"
+Environment=VAPID_PRIVATE_KEY="${VAPID_PRIVATE}"
+Environment=VAPID_SUBJECT="${SUBJECT}"
+EOF
+
+    chmod 644 "${SYSTEMD_VAPID_CONF}"
+    print_success "Wrote systemd drop-in with VAPID environment variables to ${SYSTEMD_VAPID_CONF}"
+
+    # Reload systemd so it picks up the drop-in
+    systemctl daemon-reload || true
 }
 
 ################################################################################
@@ -232,27 +330,29 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
     
-    # Reload systemd
+    # Reload systemd and enable/start
     systemctl daemon-reload
     print_success "Service file created"
     
-    # Enable service
-    systemctl enable ${SERVICE_NAME}
+    systemctl enable ${SERVICE_NAME} || true
     print_success "Service enabled for auto-start"
     
-    # Start service
-    systemctl start ${SERVICE_NAME}
-    print_success "Service started"
-    
-    # Wait a moment for service to start
-    sleep 2
-    
-    # Check service status
+    # Start or restart service
     if systemctl is-active --quiet ${SERVICE_NAME}; then
-        print_success "sTalk is running"
+        print_info "Service already running — restarting to pick up changes"
+        systemctl restart ${SERVICE_NAME}
+    else
+        systemctl start ${SERVICE_NAME}
+    fi
+    print_success "Service start/restart requested"
+
+    # wait a few seconds for service to settle
+    sleep 2
+    if systemctl is-active --quiet ${SERVICE_NAME}; then
+        print_success "sTalk service is active"
     else
         print_error "Service failed to start. Check logs with: journalctl -u ${SERVICE_NAME} -f"
-        exit 1
+        # not exiting here because VAPID may still be configured; allow user to inspect
     fi
 }
 
@@ -277,11 +377,36 @@ configure_firewall() {
 }
 
 ################################################################################
-# Post-Installation
+# Post-Installation & quick verification
 ################################################################################
 
+wait_for_server_and_show_public_key() {
+    print_step "Waiting for sTalk HTTP server to respond and fetch public key..."
+    # try curl to /api/push/key up to 12 times (approx 30 sec)
+    tries=12
+    i=0
+    while [ $i -lt $tries ]; do
+        if curl -sS "http://localhost:${PORT}/api/push/key" -m 3 -o /tmp/stalk_push_key.json 2>/dev/null; then
+            if grep -q '"publicKey"' /tmp/stalk_push_key.json 2>/dev/null; then
+                PUBLIC=$(jq -r '.publicKey' /tmp/stalk_push_key.json 2>/dev/null || sed -n 's/.*"publicKey"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/stalk_push_key.json || true)
+                if [ -n "$PUBLIC" ]; then
+                    print_success "Server push publicKey available:"
+                    echo -e "${GREEN}${PUBLIC}${NC}"
+                else
+                    print_info "Server responded but publicKey missing."
+                fi
+                return 0
+            fi
+        fi
+        i=$((i+1))
+        sleep 2
+    done
+    print_info "Could not fetch /api/push/key. Server may still be starting or route may differ. You can query it later with:"
+    echo "  curl http://localhost:${PORT}/api/push/key"
+}
+
 print_completion() {
-    SERVER_IP=$(hostname -I | awk '{print $1}')
+    SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
     
     echo ""
     echo -e "${GREEN}"
@@ -335,8 +460,13 @@ main() {
     install_nodejs
     install_git
     install_stalk
+    generate_vapid_and_configure_systemd
     setup_service
     configure_firewall
+    
+    # give service a moment, then attempt to fetch public key
+    sleep 2
+    wait_for_server_and_show_public_key
     
     echo ""
     print_completion

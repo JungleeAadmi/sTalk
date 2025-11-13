@@ -1,4 +1,4 @@
-// server.js (sTalk) - full with Web Push support integrated
+// server.js (sTalk) - full with Web Push support integrated (updated VAPID fallback)
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
@@ -35,14 +35,53 @@ const PROFILE_PATH = process.env.PROFILE_PATH || './uploads/profiles';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // VAPID / web-push config
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+// Allow initial values from env; these may be empty if systemd hasn't supplied them yet.
+let VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+let VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
 
+// Path to fallback .vapid.json (created by installer at /opt/sTalk/.vapid.json by default)
+const VAPID_FILE_PATH = process.env.VAPID_FILE_PATH || path.join(__dirname, '.vapid.json');
+
+// Helper: load VAPID keys from .vapid.json (if present)
+function loadVapidFromFile() {
+    try {
+        if (fs.existsSync(VAPID_FILE_PATH)) {
+            const raw = fs.readFileSync(VAPID_FILE_PATH, 'utf8');
+            const json = JSON.parse(raw);
+            if (json && json.publicKey && json.privateKey) {
+                VAPID_PUBLIC_KEY = json.publicKey;
+                VAPID_PRIVATE_KEY = json.privateKey;
+                console.log('🔑 Loaded VAPID keys from', VAPID_FILE_PATH);
+                try {
+                    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+                    console.log('✅ web-push configured with VAPID keys');
+                } catch (e) {
+                    console.warn('⚠️ Failed to set VAPID details on web-push:', e);
+                }
+                return true;
+            }
+        }
+    } catch (err) {
+        console.warn('⚠️ Error reading VAPID file:', err.message || err);
+    }
+    return false;
+}
+
+// If VAPID env vars were present at startup, configure web-push immediately
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    try {
+        webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+        console.log('✅ web-push configured from environment variables');
+    } catch (e) {
+        console.warn('⚠️ Failed to set VAPID details from env:', e);
+    }
 } else {
-    console.warn('⚠️ VAPID keys not configured. Push will be disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set.');
+    // Try loading VAPID file as a fallback
+    const loaded = loadVapidFromFile();
+    if (!loaded) {
+        console.warn('⚠️ VAPID keys not configured. Push will be disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set (or .vapid.json is created).');
+    }
 }
 
 // Ensure required directories exist
@@ -347,9 +386,13 @@ function generateTempPassword() {
 
 // Web-push helper: sends push notifications to a given user id (numeric)
 async function sendPushToUser(userId, payload) {
+    // Ensure VAPID keys are loaded (attempt to load file if not present)
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        console.warn('VAPID keys missing, skipping push.');
-        return;
+        const loaded = loadVapidFromFile();
+        if (!loaded) {
+            console.warn('VAPID keys missing, skipping push.');
+            return;
+        }
     }
 
     return new Promise((resolve) => {
@@ -695,6 +738,13 @@ app.post('/api/chats/:otherUserId/messages', authenticateToken, (req, res) => {
 
 // Return VAPID public key to clients
 app.get('/api/push/key', (req, res) => {
+    // Prefer env-loaded key; if not present try file (dynamically) so clients can fetch key after installer writes it
+    if (!VAPID_PUBLIC_KEY) {
+        const loaded = loadVapidFromFile();
+        if (!loaded) {
+            return res.json({ publicKey: '' });
+        }
+    }
     res.json({ publicKey: VAPID_PUBLIC_KEY || '' });
 });
 
