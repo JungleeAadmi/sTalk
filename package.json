@@ -3,9 +3,13 @@
   "version": "2.0.0",
   "description": "sTalk Production - Mobile-first team communication with file sharing",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "build": "echo \"No build step defined\"",
+    "migrate": "bash ./scripts/migrate.sh || echo \"No migrate script\"",
+    "check-vapid": "node -e \"try{const fs=require('fs'); const p=process.env.VAPID_FILE_PATH||'./.vapid.json'; console.log(fs.existsSync(p)?'VAPID OK:'+p:'No VAPID file');}catch(e){console.error(e)}"
   },
   "keywords": [
     "chat",
@@ -17,9 +21,13 @@
   ],
   "author": "sTalk Production Team",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=8.0.0"
+  },
   "dependencies": {
     "express": "^4.18.2",
-    "sqlite3": "^5.1.6", 
+    "sqlite3": "^5.1.6",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "socket.io": "^4.7.3",
@@ -30,8 +38,7 @@
     "mime-types": "^2.1.35",
     "web-push": "^3.5.0"
   },
-  "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }

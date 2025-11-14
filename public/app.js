@@ -1,4 +1,4 @@
-// sTalk - Enhanced App with Media Previews, Link Previews & Unread Counters
+// sTalk - Enhanced App with Media Previews, Link Previews, Unread Counters + Push/Sound controls
 class STalk {
     constructor() {
         this.API_BASE = window.location.origin + '/api';
@@ -12,6 +12,17 @@ class STalk {
         this.unreadCounts = new Map(); // Track unread messages per user
         this.currentTheme = localStorage.getItem('sTalk_theme') || 'light';
         this.isProcessingUserManagement = false;
+
+        // Push & sound settings
+        this.pushEnabled = localStorage.getItem('sTalk_push_enabled') === 'true';
+        // default sound enabled on desktop, disabled on small screens
+        this.soundEnabled = localStorage.getItem('sTalk_sound_enabled');
+        if (this.soundEnabled === null) {
+            this.soundEnabled = (window.innerWidth > 768);
+            localStorage.setItem('sTalk_sound_enabled', this.soundEnabled ? 'true' : 'false');
+        } else {
+            this.soundEnabled = this.soundEnabled === 'true';
+        }
 
         this.initializeApp();
         this.setupEventListeners();
@@ -52,9 +63,40 @@ class STalk {
         });
 
         // Theme toggle
-        document.getElementById('themeToggle').addEventListener('change', (e) => {
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('change', (e) => {
             this.toggleTheme();
         });
+
+        // Push toggle (settings UI element with id enablePushToggle is optional)
+        const pushToggle = document.getElementById('enablePushToggle');
+        if (pushToggle) {
+            // initialize UI state
+            pushToggle.checked = !!this.pushEnabled;
+            pushToggle.addEventListener('change', async (e) => {
+                try {
+                    if (e.target.checked) {
+                        await this.enablePush();
+                    } else {
+                        await this.disablePush();
+                    }
+                } catch (err) {
+                    console.error('Push toggle error', err);
+                    e.target.checked = !e.target.checked;
+                }
+            });
+        }
+
+        // Sound toggle
+        const soundToggle = document.getElementById('enableSoundToggle');
+        if (soundToggle) {
+            soundToggle.checked = !!this.soundEnabled;
+            soundToggle.addEventListener('change', (e) => {
+                this.soundEnabled = !!e.target.checked;
+                localStorage.setItem('sTalk_sound_enabled', this.soundEnabled ? 'true' : 'false');
+                this.showToast(this.soundEnabled ? '🔔 Sound enabled' : '🔕 Sound disabled', 'info');
+            });
+        }
 
         // Settings buttons
         document.getElementById('changePasswordBtn').addEventListener('click', () => {
@@ -157,6 +199,16 @@ class STalk {
         window.addEventListener('resize', () => {
             this.handleResize();
         });
+
+        // Listen for messages from service worker (notification click deep-links)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (ev) => {
+                if (ev.data && ev.data.type === 'notification-click') {
+                    // Data should contain { chatId, sender, url }
+                    this.handleNotificationClick(ev.data.data || {});
+                }
+            });
+        }
     }
 
     // Theme Management
@@ -184,6 +236,12 @@ class STalk {
             document.getElementById('adminSection').style.display = 'block';
         }
 
+        // ensure push/sound toggles reflect current state (if present)
+        const pushToggle = document.getElementById('enablePushToggle');
+        if (pushToggle) pushToggle.checked = !!this.pushEnabled;
+        const soundToggle = document.getElementById('enableSoundToggle');
+        if (soundToggle) soundToggle.checked = !!this.soundEnabled;
+
         const avatarLarge = document.getElementById('profileAvatarLarge');
         if (this.currentUser) {
             if (this.currentUser.profileImage) {
@@ -200,7 +258,44 @@ class STalk {
         document.getElementById('settingsModal').classList.remove('show');
     }
 
-    // User Management - Same as before
+    // Notification click handler (deep-link)
+    async handleNotificationClick(data) {
+        // data: { chatId, sender, url }
+        // Prefer sender -> find user by username
+        if (data.sender) {
+            const found = Array.from(this.users.values()).find(u => u.username === data.sender);
+            if (found) {
+                // open chat with that user
+                await this.selectUser(found.id);
+                window.focus();
+                return;
+            }
+        }
+
+        // fallback: if chatId provided, try to deduce username from chatId
+        if (data.chatId) {
+            // chatId format created by server: userA_userB (alphabetical). Find other participant
+            const parts = data.chatId.split('_');
+            const other = parts.find(p => p !== this.currentUser.username);
+            if (other) {
+                const found = Array.from(this.users.values()).find(u => u.username === other);
+                if (found) {
+                    await this.selectUser(found.id);
+                    window.focus();
+                    return;
+                }
+            }
+        }
+
+        // fallback to open provided url or root
+        if (data.url) {
+            window.open(data.url, '_self');
+        } else {
+            window.open('/', '_self');
+        }
+    }
+
+    // User Management - Same as before (unchanged)
     showUserManagement() {
         if (this.isProcessingUserManagement) return;
         this.isProcessingUserManagement = true;
@@ -559,6 +654,7 @@ class STalk {
                 this.showToast(`❌ ${error.error || 'Upload failed'}`, 'error');
             }
         } catch (error) {
+            console.error('Upload error:', error);
             this.showToast('❌ Upload failed. Check connection.', 'error');
         }
     }
@@ -717,7 +813,7 @@ class STalk {
         }
     }
 
-    // Authentication methods - Same as before
+    // Authentication methods - Same as before (with push init on successful login)
     async handleLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value;
@@ -875,6 +971,7 @@ class STalk {
             // Ignore errors during logout
         }
 
+        // If push subscription exists and we want to unsubscribe automatically, keep it manual for now.
         this.token = null;
         this.currentUser = null;
         this.selectedUserId = null;
@@ -901,14 +998,14 @@ class STalk {
         const mainApp = document.getElementById('mainApp');
         const loginScreen = document.getElementById('loginScreen');
 
-        mainApp.classList.add('d-none');
-        loginScreen.classList.add('d-none');
-        loadingScreen.classList.remove('d-none');
+        if (mainApp) mainApp.classList.add('d-none');
+        if (loginScreen) loginScreen.classList.add('d-none');
+        if (loadingScreen) loadingScreen.classList.remove('d-none');
     }
 
     hideLoading() {
         const loadingScreen = document.getElementById('loadingScreen');
-        loadingScreen.classList.add('d-none');
+        if (loadingScreen) loadingScreen.classList.add('d-none');
     }
 
     showLogin() {
@@ -916,13 +1013,15 @@ class STalk {
         const mainApp = document.getElementById('mainApp');
         const loadingScreen = document.getElementById('loadingScreen');
 
-        mainApp.classList.add('d-none');
-        loadingScreen.classList.add('d-none');
-        loginScreen.classList.remove('d-none');
+        if (mainApp) mainApp.classList.add('d-none');
+        if (loadingScreen) loadingScreen.classList.add('d-none');
+        if (loginScreen) loginScreen.classList.remove('d-none');
 
-        document.getElementById('loginUsername').value = '';
-        document.getElementById('loginPassword').value = '';
-        document.getElementById('loginUsername').focus();
+        const loginUsername = document.getElementById('loginUsername');
+        const loginPassword = document.getElementById('loginPassword');
+        if (loginUsername) loginUsername.value = '';
+        if (loginPassword) loginPassword.value = '';
+        if (loginUsername) loginUsername.focus();
     }
 
     async loadMainApp() {
@@ -930,28 +1029,35 @@ class STalk {
         const mainApp = document.getElementById('mainApp');
         const loadingScreen = document.getElementById('loadingScreen');
 
-        loginScreen.classList.add('d-none');
-        loadingScreen.classList.add('d-none');
-        mainApp.classList.remove('d-none');
+        if (loginScreen) loginScreen.classList.add('d-none');
+        if (loadingScreen) loadingScreen.classList.add('d-none');
+        if (mainApp) mainApp.classList.remove('d-none');
 
         this.updateUserInterface();
         this.connectSocket();
         await this.loadUsers();
+
+        // initialize push registration UI + attempt (if previously enabled)
+        await this.initPush();
     }
 
     updateUserInterface() {
-        document.getElementById('userName').textContent = this.currentUser.fullName;
-        document.getElementById('userUsername').textContent = `@${this.currentUser.username}`;
+        const userName = document.getElementById('userName');
+        const userUsername = document.getElementById('userUsername');
+        if (userName) userName.textContent = this.currentUser.fullName;
+        if (userUsername) userUsername.textContent = `@${this.currentUser.username}`;
 
         const userAvatar = document.getElementById('userAvatar');
-        if (this.currentUser.profileImage) {
-            userAvatar.style.backgroundImage = `url(${this.currentUser.profileImage})`;
-            userAvatar.style.backgroundSize = 'cover';
-            userAvatar.style.backgroundPosition = 'center';
-            userAvatar.textContent = '';
-        } else {
-            userAvatar.style.backgroundImage = '';
-            userAvatar.textContent = this.currentUser.avatar || 'A';
+        if (userAvatar) {
+            if (this.currentUser.profileImage) {
+                userAvatar.style.backgroundImage = `url(${this.currentUser.profileImage})`;
+                userAvatar.style.backgroundSize = 'cover';
+                userAvatar.style.backgroundPosition = 'center';
+                userAvatar.textContent = '';
+            } else {
+                userAvatar.style.backgroundImage = '';
+                userAvatar.textContent = this.currentUser.avatar || 'A';
+            }
         }
     }
 
@@ -998,8 +1104,18 @@ class STalk {
                 }
             }
 
-            // NO MORE TOAST NOTIFICATIONS ON MESSAGE RECEIVED
-            this.playNotificationSound();
+            // Show a local browser notification if page is hidden and permission is granted
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                    this.showBrowserNotification({
+                        senderName: message.senderName || message.sender,
+                        content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
+                    });
+                } catch (e) { /* ignore */ }
+            }
+
+            // Play notification sound if enabled
+            if (this.soundEnabled) this.playNotificationSound();
         });
 
         this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
@@ -1014,18 +1130,25 @@ class STalk {
     }
 
     playNotificationSound() {
+        if (!this.soundEnabled) return;
         try {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            // Use Web Audio API for short beep
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const audioContext = new AudioContext();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.value = 800;
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 1000;
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
             oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.1);
+            setTimeout(() => {
+                oscillator.stop();
+                // close context to free resources
+                if (audioContext.close) audioContext.close().catch(()=>{});
+            }, 100);
         } catch (error) {
             // Silent fail if audio not supported
         }
@@ -1033,46 +1156,215 @@ class STalk {
 
     // Request notification permission
     async requestNotificationPermission() {
-        if ('Notification' in window && Notification.permission === 'default') {
+        if (!('Notification' in window)) return 'unsupported';
+        if (Notification.permission === 'granted') return 'granted';
+        if (Notification.permission === 'denied') return 'denied';
+        try {
+            const permission = await Notification.requestPermission();
+            return permission;
+        } catch (error) {
+            return 'error';
+        }
+    }
+
+    // Show browser notification (fallback local notification)
+    showBrowserNotification(message) {
+        // Only show notifications if permission is granted and page hidden
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+        try {
+            const notification = new Notification(message.senderName || 'sTalk', {
+                body: message.content || '',
+                icon: '/android-chrome-192x192.png',
+                badge: '/favicon-16x16.png',
+                tag: message.tag || 'stalk-message',
+                renotify: false,
+                silent: !this.soundEnabled // let sound play separately if enabled
+            });
+
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+            };
+
+            setTimeout(() => notification.close(), 5000);
+        } catch (error) {
+            console.log('Failed to show notification:', error);
+        }
+    }
+
+    // Initialize push: check support, set UI, try to auto-subscribe if previously enabled
+    async initPush() {
+        // if service worker / Push API not supported - reflect in UI and return
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            console.debug('Push not supported in this browser');
+            return;
+        }
+
+        // If push was previously enabled by user, attempt to re-subscribe automatically
+        if (this.pushEnabled) {
             try {
-                const permission = await Notification.requestPermission();
-                console.log('Notification permission:', permission);
-            } catch (error) {
-                console.log('Notification permission request failed:', error);
+                await this.ensureServiceWorkerRegistered();
+                // If push-client helper exists (included as push-client.js), use it
+                if (window.pushClient && this.token) {
+                    // get public key from server
+                    const resp = await fetch(`${this.API_BASE}/push/key`);
+                    if (resp.ok) {
+                        const { publicKey } = await resp.json();
+                        if (publicKey) {
+                            await window.pushClient.subscribeForPush(publicKey, this.token);
+                            console.log('Push re-subscription succeeded');
+                        }
+                    }
+                } else {
+                    // attempt to get existing subscription and send to server manually
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg) {
+                        const sub = await reg.pushManager.getSubscription();
+                        if (sub && this.token) {
+                            // send subscription to server
+                            await fetch('/api/push/subscribe', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${this.token}`
+                                },
+                                body: JSON.stringify({ subscription: sub })
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Auto push init failed', e);
+            }
+        }
+
+        // ensure UI toggle exists and displays correct state
+        const pushToggle = document.getElementById('enablePushToggle');
+        if (pushToggle) pushToggle.checked = !!this.pushEnabled;
+    }
+
+    // Ensure service worker is registered (used by push-client)
+    async ensureServiceWorkerRegistered() {
+        if (!('serviceWorker' in navigator)) return;
+        // register if not registered
+        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        if (!reg) {
+            try {
+                await navigator.serviceWorker.register('/sw.js');
+                console.log('Service worker registered by app init');
+            } catch (err) {
+                console.warn('Service worker registration failed', err);
             }
         }
     }
 
-    // Show browser notification
-    showBrowserNotification(message) {
-        // Only show notifications if page is not visible and permission is granted
-        if ('Notification' in window && 
-            Notification.permission === 'granted' && 
-            document.hidden) {
+    // Enable push: request permission, register SW, then subscribe and send to server
+    async enablePush() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            alert('Push notifications are not supported by this browser.');
+            return;
+        }
 
-            try {
-                const notification = new Notification('New message from ' + message.senderName, {
-                    body: message.content || 'File shared',
-                    icon: '/favicon.ico', // You can customize this
-                    tag: 'stalk-message', // Prevent multiple notifications
-                    requireInteraction: false,
-                    silent: false
+        const permission = await this.requestNotificationPermission();
+        if (permission !== 'granted') {
+            alert('Notifications permission not granted. Please enable in browser settings.');
+            // reflect UI
+            const pushToggle = document.getElementById('enablePushToggle');
+            if (pushToggle) pushToggle.checked = false;
+            return;
+        }
+
+        try {
+            // register service worker if needed
+            await this.ensureServiceWorkerRegistered();
+
+            // fetch public vapid key from server
+            const resp = await fetch(`${this.API_BASE}/push/key`);
+            if (!resp.ok) throw new Error('Failed to fetch push key from server');
+            const { publicKey } = await resp.json();
+            if (!publicKey) throw new Error('Server did not provide a VAPID public key');
+
+            // use helper if available
+            if (window.pushClient && this.token) {
+                await window.pushClient.subscribeForPush(publicKey, this.token);
+            } else {
+                // fallback: use raw PushManager subscribe then send to our subscribe endpoint
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (!reg) throw new Error('Service worker registration missing');
+                const sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: this.urlBase64ToUint8Array(publicKey)
                 });
 
-                // Auto-close notification after 5 seconds
-                setTimeout(() => {
-                    notification.close();
-                }, 5000);
-
-                // Handle notification click
-                notification.onclick = () => {
-                    window.focus();
-                    notification.close();
-                };
-            } catch (error) {
-                console.log('Failed to show notification:', error);
+                // send subscription to server
+                await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: JSON.stringify({ subscription: sub })
+                });
             }
+
+            this.pushEnabled = true;
+            localStorage.setItem('sTalk_push_enabled', 'true');
+            this.showToast('✅ Push notifications enabled', 'success');
+        } catch (err) {
+            console.error('Enable push failed', err);
+            this.pushEnabled = false;
+            localStorage.setItem('sTalk_push_enabled', 'false');
+            this.showToast('❌ Failed to enable push', 'error');
+            throw err;
         }
+    }
+
+    // Disable push: attempt to unsubscribe and notify server
+    async disablePush() {
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (!reg) {
+                this.pushEnabled = false;
+                localStorage.setItem('sTalk_push_enabled', 'false');
+                this.showToast('✅ Push disabled', 'success');
+                return;
+            }
+
+            const sub = await reg.pushManager.getSubscription();
+            if (sub && this.token) {
+                // notify server to remove subscription
+                await fetch('/api/push/unsubscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: JSON.stringify({ endpoint: sub.endpoint })
+                });
+                await sub.unsubscribe();
+            }
+
+            this.pushEnabled = false;
+            localStorage.setItem('sTalk_push_enabled', 'false');
+            this.showToast('✅ Push disabled', 'success');
+        } catch (err) {
+            console.warn('Disable push failed', err);
+            this.showToast('❌ Failed to disable push', 'error');
+            throw err;
+        }
+    }
+
+    // small utility used by fallback subscribe code
+    urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
     }
 
     // Enhanced user list with unread counters
@@ -1102,6 +1394,8 @@ class STalk {
 
     renderUserList(users) {
         const userList = document.getElementById('userList');
+
+        if (!userList) return;
 
         if (users.length === 0) {
             userList.innerHTML = `
@@ -1174,25 +1468,31 @@ class STalk {
         document.querySelectorAll('.user-item').forEach(item => {
             item.classList.remove('active');
         });
-        document.querySelector(`[data-user-id="${userId}"]`).classList.add('active');
+        const el = document.querySelector(`[data-user-id="${userId}"]`);
+        if (el) el.classList.add('active');
 
         // Update chat header - NO MORE DUPLICATE GREEN DOT
-        document.getElementById('chatHeaderName').textContent = user.fullName;
-        document.getElementById('chatHeaderStatus').textContent = 
-            user.isOnline ? '🟢 Online' : '⚪ Offline';
-        document.getElementById('chatHeader').style.display = 'flex';
-        document.getElementById('messageInputContainer').style.display = 'flex';
+        const chatHeaderName = document.getElementById('chatHeaderName');
+        const chatHeaderStatus = document.getElementById('chatHeaderStatus');
+        if (chatHeaderName) chatHeaderName.textContent = user.fullName;
+        if (chatHeaderStatus) chatHeaderStatus.textContent = user.isOnline ? '🟢 Online' : '⚪ Offline';
+        const chatHeader = document.getElementById('chatHeader');
+        if (chatHeader) chatHeader.style.display = 'flex';
+        const messageInputContainer = document.getElementById('messageInputContainer');
+        if (messageInputContainer) messageInputContainer.style.display = 'flex';
 
         await this.loadMessages(userId);
         this.showChatDetail();
 
         setTimeout(() => {
-            document.getElementById('messageInput').focus();
+            const mi = document.getElementById('messageInput');
+            if (mi) mi.focus();
         }, 100);
     }
 
     async loadMessages(userId) {
         const container = document.getElementById('messagesContainer');
+        if (!container) return;
         container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
         try {
@@ -1228,6 +1528,7 @@ class STalk {
     // NEW: Enhanced message rendering with media previews and link previews
     renderMessages(messages) {
         const container = document.getElementById('messagesContainer');
+        if (!container) return;
 
         if (messages.length === 0) {
             container.innerHTML = `
@@ -1359,7 +1660,9 @@ class STalk {
             // Add link preview for the first URL
             if (urls.length > 0) {
                 const firstUrl = urls[0].replace(/[.,!?;]$/, '');
-                renderedContent += this.generateLinkPreview(firstUrl);
+                try {
+                    renderedContent += this.generateLinkPreview(firstUrl);
+                } catch (e) { /* ignore invalid URLs */ }
             }
         }
 
@@ -1482,6 +1785,7 @@ class STalk {
 
     addMessageToUI(message, scroll = false) {
         const container = document.getElementById('messagesContainer');
+        if (!container) return;
         const emptyState = container.querySelector('.empty-state');
 
         if (emptyState) {
@@ -1558,11 +1862,12 @@ class STalk {
     updateSendButton() {
         const input = document.getElementById('messageInput');
         const btn = document.getElementById('sendBtn');
-        btn.disabled = !input.value.trim();
+        if (btn) btn.disabled = !input.value.trim();
     }
 
     handleTyping() {
         if (!this.selectedUserId) return;
+        if (!this.socket) return;
 
         if (!this.isTyping) {
             this.isTyping = true;
@@ -1608,12 +1913,12 @@ class STalk {
                     newIndicator.className = 'online-indicator';
                     userItem.querySelector('.user-item-avatar').appendChild(newIndicator);
                 }
-                if (unreadCount === 0) {
+                if (unreadCount === 0 && status) {
                     status.textContent = '🟢 Online';
                 }
             } else {
                 if (indicator) indicator.remove();
-                if (unreadCount === 0) {
+                if (unreadCount === 0 && status) {
                     status.textContent = '⚪ Offline';
                 }
             }
@@ -1635,27 +1940,34 @@ class STalk {
 
     scrollToBottom() {
         const container = document.getElementById('messagesContainer');
+        if (!container) return;
         container.scrollTop = container.scrollHeight;
     }
 
     showChatDetail() {
         if (window.innerWidth <= 768) {
-            document.getElementById('chatListContainer').classList.add('hidden');
-            document.getElementById('chatDetailContainer').classList.add('show');
+            const list = document.getElementById('chatListContainer');
+            const detail = document.getElementById('chatDetailContainer');
+            if (list) list.classList.add('hidden');
+            if (detail) detail.classList.add('show');
         }
     }
 
     showChatList() {
         if (window.innerWidth <= 768) {
-            document.getElementById('chatListContainer').classList.remove('hidden');
-            document.getElementById('chatDetailContainer').classList.remove('show');
+            const list = document.getElementById('chatListContainer');
+            const detail = document.getElementById('chatDetailContainer');
+            if (list) list.classList.remove('hidden');
+            if (detail) detail.classList.remove('show');
         }
     }
 
     handleResize() {
         if (window.innerWidth > 768) {
-            document.getElementById('chatListContainer').classList.remove('hidden');
-            document.getElementById('chatDetailContainer').classList.remove('show');
+            const list = document.getElementById('chatListContainer');
+            const detail = document.getElementById('chatDetailContainer');
+            if (list) list.classList.remove('hidden');
+            if (detail) detail.classList.remove('show');
         }
     }
 
@@ -1664,14 +1976,15 @@ class STalk {
         const term = searchTerm.toLowerCase();
 
         userItems.forEach(item => {
-            const name = item.querySelector('.user-item-name').textContent.toLowerCase();
+            const name = (item.querySelector('.user-item-name')?.textContent || '').toLowerCase();
             const visible = name.includes(term);
             item.style.display = visible ? 'flex' : 'none';
         });
     }
 
     toggleUserDropdown() {
-        document.getElementById('userDropdown').classList.toggle('show');
+        const dd = document.getElementById('userDropdown');
+        if (dd) dd.classList.toggle('show');
     }
 
     setLoginLoading(loading) {
@@ -1680,18 +1993,19 @@ class STalk {
         const spinner = document.getElementById('loginSpinner');
 
         if (loading) {
-            btn.disabled = true;
-            text.classList.add('d-none');
-            spinner.classList.remove('d-none');
+            if (btn) btn.disabled = true;
+            if (text) text.classList.add('d-none');
+            if (spinner) spinner.classList.remove('d-none');
         } else {
-            btn.disabled = false;
-            text.classList.remove('d-none');
-            spinner.classList.add('d-none');
+            if (btn) btn.disabled = false;
+            if (text) text.classList.remove('d-none');
+            if (spinner) spinner.classList.add('d-none');
         }
     }
 
     showAlert(message, type = 'error') {
         const alertDiv = document.getElementById('loginAlert');
+        if (!alertDiv) return;
         alertDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
         setTimeout(() => {
             alertDiv.innerHTML = '';
@@ -1704,6 +2018,7 @@ class STalk {
         if (window.innerWidth <= 768) return;
 
         const container = document.getElementById('toastContainer');
+        if (!container) return;
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
 
@@ -1727,11 +2042,12 @@ class STalk {
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 sTalk - Enhanced with media previews, link previews & unread counters!');
+    console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
     window.app = new STalk();
 });
 
 // Service Worker registration for PWA (if available)
+// keep this lightweight; registration also happens inside initPush/ensureServiceWorkerRegistered
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
@@ -1739,7 +2055,7 @@ if ('serviceWorker' in navigator) {
                 console.log('🔧 Service Worker registered');
             })
             .catch(error => {
-                console.log('🔧 Service Worker registration failed');
+                console.log('🔧 Service Worker registration failed', error);
             });
     });
 }

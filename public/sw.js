@@ -22,10 +22,11 @@ self.addEventListener('activate', (event) => {
 // Handle push events
 self.addEventListener('push', (event) => {
   let payload = null;
+
   try {
     payload = event.data ? event.data.json() : null;
   } catch (err) {
-    // if not JSON, fallback to text
+    // if not JSON, fallback to plain text
     try {
       payload = { body: event.data ? event.data.text() : '' };
     } catch (e) {
@@ -35,25 +36,29 @@ self.addEventListener('push', (event) => {
 
   const title = (payload && payload.title) ? payload.title : DEFAULT_TITLE;
 
+  // Ensure data object always exists and contains a url fallback
+  const data = (payload && typeof payload.data === 'object') ? payload.data : {};
+  if (!data.url && payload && payload.url) data.url = payload.url;
+  if (!data.url) data.url = '/';
+
   const options = {
     body: (payload && payload.body) || '',
     icon: (payload && payload.icon) || DEFAULT_ICON,
     badge: (payload && payload.badge) || DEFAULT_BADGE,
-    data: (payload && payload.data) || { url: payload && payload.url ? payload.url : '/' },
-    vibrate: payload && payload.vibrate ? payload.vibrate : [100, 50, 100],
+    data: data,
+    vibrate: (payload && payload.vibrate) ? payload.vibrate : [100, 50, 100],
     renotify: !!(payload && payload.renotify),
-    tag: payload && payload.tag,
+    tag: (payload && payload.tag) || undefined,
     requireInteraction: !!(payload && payload.requireInteraction),
-    actions: payload && payload.actions ? payload.actions : []
+    actions: (payload && Array.isArray(payload.actions)) ? payload.actions : []
   };
 
   event.waitUntil(
     (async () => {
-      // show notification
       try {
         await self.registration.showNotification(title, options);
       } catch (e) {
-        // swallow - some environments may block
+        // Some environments may restrict notifications; log for debugging
         console.error('showNotification error', e);
       }
     })()
@@ -69,31 +74,41 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Look for an open client to focus
-      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of allClients) {
-        // If same-origin app open, focus and post message
-        try {
-          const clientUrl = client.url || '';
-          // Focus any client that belongs to this origin
-          if (new URL(clientUrl).origin === self.location.origin) {
-            // Focus the window
-            if ('focus' in client) await client.focus();
-            // Let the page handle deep-link with a message
-            client.postMessage({ type: 'notification-click', data });
-            // If a navigation URL is provided, try navigating the client (best-effort)
-            if (openUrl && client.navigate) {
-              try { await client.navigate(openUrl); } catch (e) { /* ignore */ }
+      try {
+        const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+        for (const client of allClients) {
+          // Only consider same-origin clients (defensive)
+          try {
+            const clientUrl = client.url || '';
+            if (new URL(clientUrl).origin === self.location.origin) {
+              if (client.focus) await client.focus();
+
+              // Let the page handle deep-linking via postMessage
+              try {
+                client.postMessage({ type: 'notification-click', data });
+              } catch (e) {
+                // ignore postMessage failures
+              }
+
+              // Best-effort navigate if supported
+              if (openUrl && client.navigate) {
+                try { await client.navigate(openUrl); } catch (e) { /* ignore */ }
+              }
+              return;
             }
-            return;
+          } catch (e) {
+            // ignore malformed client.url
           }
-        } catch (e) {
-          // ignore malformed client.url
         }
-      }
-      // No matching client found — open a new window/tab
-      if (clients.openWindow) {
-        await clients.openWindow(openUrl);
+
+        // No matching client found — open a new window/tab
+        if (clients.openWindow) {
+          await clients.openWindow(openUrl);
+        }
+      } catch (e) {
+        // swallow to avoid unhandled promise rejections
+        console.error('notificationclick handler failed', e);
       }
     })()
   );
@@ -109,9 +124,17 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   // Notify open clients so they can re-subscribe and update server-side subscription
   event.waitUntil(
     (async () => {
-      const allClients = await clients.matchAll({ includeUncontrolled: true });
-      for (const client of allClients) {
-        client.postMessage({ type: 'pushsubscriptionchange' });
+      try {
+        const allClients = await clients.matchAll({ includeUncontrolled: true });
+        for (const client of allClients) {
+          try {
+            client.postMessage({ type: 'pushsubscriptionchange' });
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (e) {
+        // ignore
       }
     })()
   );
