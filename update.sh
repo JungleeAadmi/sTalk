@@ -26,8 +26,9 @@ LOCK_FILE="/var/lock/stalk-update.lock"
 trap 'rm -rf "${TMPDIR}"' EXIT
 
 # --- Acquire exclusive lock so multiple updates don't collide ---
-exec ${LOCK_FD}>"${LOCK_FILE}"
-if ! flock -n ${LOCK_FD}; then
+# Use literal FD 200 to avoid shell parsing ambiguity
+exec 200>"${LOCK_FILE}"
+if ! flock -n 200; then
   printf "\033[1;31m❌ Another update process is running. Exiting.\033[0m\n"
   exit 1
 fi
