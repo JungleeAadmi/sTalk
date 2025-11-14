@@ -673,7 +673,11 @@
             transform: translateX(0);
         }
 
+<<<<<<< HEAD
+        /* Make header sticky so it remains visible during scroll & when keyboard opens */
+=======
         /* sticky header: will remain visible while messages scroll */
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
         .chat-header {
             background: var(--surface);
             padding: 1rem;
@@ -701,6 +705,23 @@
             background: var(--surface-variant);
         }
 
+        /* header avatar slot */
+        .chat-header-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1rem;
+            flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+        }
+
         .chat-header-info {
             flex: 1;
         }
@@ -708,6 +729,9 @@
         .chat-header-name {
             font-weight: 600;
             margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .chat-header-status {
@@ -1140,11 +1164,22 @@
 
         /* Mobile Layout - safer approach (removed fixed html/body) */
         @media (max-width: 768px) {
+<<<<<<< HEAD
+            /* Removed position: fixed on html, body to avoid iOS PWA top-gap */
+=======
             /* Keep body scrollable to allow keyboard to resize viewport */
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
             html, body {
+<<<<<<< HEAD
+=======
                 /* Do not fix position; allow natural viewport changes */
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
                 width: 100%;
                 height: 100%;
+<<<<<<< HEAD
+                /* DO NOT set position: fixed here */
+=======
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
             }
 
             /* Force input elements visible */
@@ -1683,7 +1718,13 @@
 
             <div class="chat-detail-container" id="chatDetailContainer">
                 <div class="chat-header" id="chatHeader" style="display: none;">
+<<<<<<< HEAD
+                    <button class="back-btn" id="backBtn">←</button>
+                    <!-- NEW: header avatar slot inserted so profile picture shows between back and name -->
+                    <div class="chat-header-avatar" id="chatHeaderAvatar">A</div>
+=======
                     <button class="back-btn" id="backBtn" aria-label="Back">←</button>
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
                     <div class="chat-header-info">
                         <div class="chat-header-name" id="chatHeaderName">Select a user</div>
                         <div class="chat-header-status" id="chatHeaderStatus">to start messaging</div>
@@ -1732,6 +1773,135 @@
     <script src="app.js"></script>
     <!-- Push Notification Client -->
     <script src="/push-client.js"></script>
+<<<<<<< HEAD
+
+    <!-- Helper script: keeps header sticky, adjusts messages area when keyboard appears, and exposes small API -->
+    <script>
+    (function () {
+      'use strict';
+
+      const messagesContainer = document.getElementById('messagesContainer');
+      const chatHeader = document.getElementById('chatHeader');
+      const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
+      const chatHeaderName = document.getElementById('chatHeaderName');
+      const chatHeaderStatus = document.getElementById('chatHeaderStatus');
+      const messageInputContainer = document.getElementById('messageInputContainer');
+      const messageInput = document.getElementById('messageInput');
+
+      // Set avatar helper: accepts URL (starts with http or /), emoji, or text initial
+      window.setChatHeaderAvatar = function (value) {
+        if (!chatHeaderAvatar) return;
+        try {
+          if (!value) {
+            chatHeaderAvatar.style.backgroundImage = '';
+            chatHeaderAvatar.textContent = '';
+            return;
+          }
+          if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/'))) {
+            chatHeaderAvatar.style.backgroundImage = 'url("' + value + '")';
+            chatHeaderAvatar.textContent = '';
+          } else {
+            chatHeaderAvatar.style.backgroundImage = '';
+            chatHeaderAvatar.textContent = value;
+          }
+        } catch (e) { /* ignore */ }
+      };
+
+      // Listen for custom event 'chat:selected' (app.js can dispatch this)
+      window.addEventListener('chat:selected', (ev) => {
+        const d = ev && ev.detail;
+        if (!d) return;
+        if (d.name) chatHeaderName.textContent = d.name;
+        if (d.status) chatHeaderStatus.textContent = d.status;
+        if (typeof d.avatar !== 'undefined') setChatHeaderAvatar(d.avatar);
+        if (chatHeader) chatHeader.style.display = 'flex';
+        setTimeout(() => {
+          try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
+        }, 50);
+      });
+
+      // Small API for programmatic updates
+      window.updateChatHeader = function ({ name, status, avatar }) {
+        if (name) chatHeaderName.textContent = name;
+        if (status) chatHeaderStatus.textContent = status;
+        if (typeof avatar !== 'undefined') setChatHeaderAvatar(avatar);
+        if (chatHeader) chatHeader.style.display = 'flex';
+      };
+
+      // Recalculate messages container height using visualViewport when keyboard opens (mobile)
+      function adjustForViewport() {
+        try {
+          const headerHeight = (chatHeader && chatHeader.getBoundingClientRect) ? chatHeader.getBoundingClientRect().height : 0;
+          const inputHeight = (messageInputContainer && messageInputContainer.getBoundingClientRect) ? messageInputContainer.getBoundingClientRect().height : 0;
+
+          const viewportHeight = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+          // leave a small gap
+          const available = Math.max(120, Math.floor(viewportHeight - headerHeight - inputHeight - 8));
+          if (messagesContainer) {
+            messagesContainer.style.height = available + 'px';
+            messagesContainer.style.maxHeight = available + 'px';
+          }
+        } catch (e) {
+          // ignore errors
+        }
+      }
+
+      function debounce(fn, ms) {
+        let t;
+        return function () {
+          clearTimeout(t);
+          t = setTimeout(() => fn(), ms || 50);
+        };
+      }
+
+      const debouncedAdjust = debounce(adjustForViewport, 60);
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', debouncedAdjust);
+        window.visualViewport.addEventListener('scroll', debouncedAdjust);
+      } else {
+        window.addEventListener('resize', debouncedAdjust);
+      }
+
+      if (messageInput) {
+        messageInput.addEventListener('focus', () => setTimeout(debouncedAdjust, 60));
+        messageInput.addEventListener('blur', () => setTimeout(debouncedAdjust, 60));
+        messageInput.addEventListener('input', debouncedAdjust);
+      }
+
+      window.addEventListener('orientationchange', debouncedAdjust);
+      document.addEventListener('visibilitychange', debouncedAdjust);
+
+      // On load, set sizes
+      window.addEventListener('load', () => setTimeout(adjustForViewport, 150));
+
+      // Keep header visible when keyboard opens (some iOS cases)
+      function ensureHeaderVisible() {
+        if (!chatHeader) return;
+        try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
+      }
+      if (messageInput) {
+        messageInput.addEventListener('focus', ensureHeaderVisible);
+      }
+
+      // Scroll to bottom helper while preserving header visibility
+      window.appScrollToBottom = function (keepHeader) {
+        if (!messagesContainer) return;
+        if (keepHeader && chatHeader) {
+          try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
+        }
+        setTimeout(() => {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 40);
+      };
+
+      // Initial adjust
+      setTimeout(adjustForViewport, 200);
+
+    })();
+    </script>
+
+=======
 
     <script>
         // small helper to ensure message input is visible when keyboard opens
@@ -1774,5 +1944,6 @@
         });
     </script>
 
+>>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
 </body>
 </html>

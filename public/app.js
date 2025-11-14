@@ -1570,6 +1570,33 @@ class STalk {
         const messageInputContainer = document.getElementById('messageInputContainer');
         if (messageInputContainer) messageInputContainer.style.display = 'flex';
 
+        // NEW: set header avatar slot and dispatch chat:selected event so index.html helper handles viewport/scrolling
+        try {
+            const headerAvatar = document.getElementById('chatHeaderAvatar');
+            if (headerAvatar) {
+                if (user.profileImage) {
+                    headerAvatar.style.backgroundImage = `url(${user.profileImage})`;
+                    headerAvatar.textContent = '';
+                } else {
+                    headerAvatar.style.backgroundImage = '';
+                    // prefer emoji avatar, fallback to initial
+                    const avatarText = user.avatar || (user.fullName ? user.fullName.charAt(0).toUpperCase() : (user.username ? user.username.charAt(0).toUpperCase() : 'U'));
+                    headerAvatar.textContent = avatarText;
+                }
+            }
+
+            // Dispatch event for header helpers (index.html listens for 'chat:selected')
+            window.dispatchEvent(new CustomEvent('chat:selected', {
+                detail: {
+                    name: user.fullName,
+                    status: user.isOnline ? 'Online' : 'Offline',
+                    avatar: user.profileImage ? user.profileImage : (user.avatar || (user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'))
+                }
+            }));
+        } catch (e) {
+            console.warn('Failed to update chat header avatar/event', e);
+        }
+
         await this.loadMessages(userId);
         this.showChatDetail();
 
@@ -1594,6 +1621,12 @@ class STalk {
             if (response.ok) {
                 const messages = await response.json();
                 this.renderMessages(messages);
+                // preserve header visibility while scrolling to bottom if helper exists
+                if (window.appScrollToBottom) {
+                    window.appScrollToBottom(true);
+                } else {
+                    this.scrollToBottom();
+                }
             } else {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1825,7 +1858,7 @@ class STalk {
         if (mimeType.startsWith('video/')) return '🎥';
         if (mimeType.includes('pdf')) return '📄';
         if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
-        if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+        if (mimeType.includes('spreadsheet') or mimeType.includes('excel')) return '📊';
         if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
         return '📎';
     }
@@ -1902,7 +1935,12 @@ class STalk {
         container.appendChild(messageDiv);
 
         if (scroll) {
-            this.scrollToBottom();
+            // Prefer the index.html helper that keeps header visible when scrolling
+            if (window.appScrollToBottom) {
+                window.appScrollToBottom(true);
+            } else {
+                this.scrollToBottom();
+            }
         }
     }
 
