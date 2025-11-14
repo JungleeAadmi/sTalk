@@ -1,16 +1,19 @@
 // public/push-client.js
-// Client helper for push registration and subscription.
-// Usage: window.pushClient.subscribeForPush(vapidPublicKey, jwtToken)
-//        window.pushClient.unregister(jwtToken)
-// Listens for notification-click messages from the SW and re-dispatches as a CustomEvent.
+// Push client for sTalk - registers service worker, subscribes and posts subscription to server
 
 (function () {
   'use strict';
 
+  const API_KEY_ENDPOINT = '/api/push/key';
+  const SUBSCRIBE_ENDPOINT = '/api/push/subscribe';
+  const UNSUBSCRIBE_ENDPOINT = '/api/push/unsubscribe';
+  const SW_PATH = '/sw.js';
+  const REQ_SCOPE = '/';
+
   function urlBase64ToUint8Array(base64String) {
-    // base64url -> Uint8Array
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    // Standard helper for VAPID key conversion
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
     const rawData = atob(base64);
     const outputArray = new Uint8Array(rawData.length);
     for (let i = 0; i < rawData.length; ++i) {
@@ -19,140 +22,201 @@
     return outputArray;
   }
 
-  async function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) {
-      throw new Error('Service Worker not supported in this browser.');
-    }
-    // register at root so scope covers the app
-    try {
-      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      // ensure active
-      if (reg.waiting) await reg.waiting;
-      return reg;
-    } catch (err) {
-      throw new Error('Service Worker registration failed: ' + (err && err.message ? err.message : err));
-    }
-  }
+  const pushClient = {
+    registration: null,
+    applicationServerKey: null,
+    subscription: null,
 
-  async function subscribeForPush(vapidPublicKey, jwtToken) {
-    if (!('Notification' in window) || !('PushManager' in window)) {
-      throw new Error('Push notifications are not supported in this browser.');
-    }
-
-    if (!vapidPublicKey || typeof vapidPublicKey !== 'string') {
-      throw new Error('VAPID public key is required (pass it to subscribeForPush).');
-    }
-
-    // ask permission
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      throw new Error('Notification permission not granted.');
-    }
-
-    const reg = await registerServiceWorker();
-    if (!reg) throw new Error('Service Worker registration not available.');
-
-    // try to reuse existing subscription
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) {
-      // ensure server knows about it (best-effort)
-      try {
-        await sendSubscriptionToServer(existing, jwtToken);
-      } catch (e) {
-        console.warn('Failed to send existing subscription to server:', e);
+    async init() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.info('Push not supported in this browser');
+        return;
       }
-      return existing;
+
+      try {
+        // Register SW (if not already)
+        this.registration = await navigator.serviceWorker.register(SW_PATH, { scope: REQ_SCOPE });
+        console.info('Service Worker registered', this.registration.scope);
+
+        // listen for SW messages
+        navigator.serviceWorker.addEventListener('message', (ev) => {
+          try {
+            const { type, data } = ev.data || {};
+            if (type === 'notification-click' && window.app) {
+              window.app.showToast('🔔 Notification clicked', 'info');
+              // let app handle deep link message
+              if (data && data.url) {
+                // app can implement custom handler on message
+                window.app && window.app.handleNotificationClick && window.app.handleNotificationClick(data);
+              }
+            }
+            if (type === 'pushsubscriptionchange') {
+              console.info('Push subscription changed - re-subscribing');
+              this.subscribe(true);
+            }
+          } catch (e) {}
+        });
+
+        // Get VAPID public key from server
+        const r = await fetch(API_KEY_ENDPOINT, { credentials: 'same-origin' });
+        if (r.ok) {
+          const json = await r.json();
+          if (json && json.publicKey) {
+            this.applicationServerKey = urlBase64ToUint8Array(json.publicKey);
+          } else {
+            console.warn('No VAPID public key available from server');
+          }
+        } else {
+          console.warn('Failed to fetch VAPID key from server');
+        }
+
+        // Check existing subscription
+        this.subscription = await this.registration.pushManager.getSubscription();
+        if (this.subscription) {
+          console.info('Existing push subscription found');
+          // Try to ensure server has it (optional)
+          await this.postSubscription(this.subscription);
+        }
+
+      } catch (err) {
+        console.error('Push init error', err);
+      }
+    },
+
+    async requestPermission() {
+      if (!('Notification' in window)) return false;
+      if (Notification.permission === 'granted') return true;
+      try {
+        const permission = await Notification.requestPermission();
+        return permission === 'granted';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    async subscribe(force = false) {
+      if (!this.registration) {
+        console.warn('Service Worker not registered');
+        return;
+      }
+      if (!this.applicationServerKey) {
+        console.warn('No applicationServerKey configured; cannot subscribe');
+        return;
+      }
+
+      if (!force && Notification.permission !== 'granted') {
+        const ok = await this.requestPermission();
+        if (!ok) {
+          console.warn('Notification permission denied');
+          return;
+        }
+      }
+
+      try {
+        const existing = await this.registration.pushManager.getSubscription();
+        if (existing && !force) {
+          this.subscription = existing;
+          await this.postSubscription(existing);
+          return existing;
+        }
+
+        const sub = await this.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: this.applicationServerKey
+        });
+
+        this.subscription = sub;
+        console.info('Push subscribed', sub);
+        await this.postSubscription(sub);
+        return sub;
+      } catch (err) {
+        console.error('Failed to subscribe to push', err);
+        if (window.app && window.app.showToast) window.app.showToast('🔕 Push subscription failed', 'error');
+      }
+    },
+
+    async unsubscribe() {
+      try {
+        const sub = await (this.registration ? this.registration.pushManager.getSubscription() : null);
+        if (!sub) return true;
+        await this.postUnsubscribe(sub);
+        const ok = await sub.unsubscribe();
+        if (ok) {
+          this.subscription = null;
+          console.info('Unsubscribed from push');
+        }
+        return ok;
+      } catch (err) {
+        console.error('Unsubscribe error', err);
+        return false;
+      }
+    },
+
+    async postSubscription(subscription) {
+      try {
+        const token = localStorage.getItem('sTalk_token');
+        if (!token) {
+          console.warn('No auth token to send subscription to server');
+          return;
+        }
+
+        const response = await fetch(SUBSCRIBE_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ subscription })
+        });
+
+        if (!response.ok) {
+          console.warn('Server did not accept subscription');
+        } else {
+          console.info('Subscription posted to server');
+        }
+      } catch (err) {
+        console.error('postSubscription error', err);
+      }
+    },
+
+    async postUnsubscribe(subscription) {
+      try {
+        const token = localStorage.getItem('sTalk_token');
+        const endpoint = subscription && subscription.endpoint;
+        if (!token || !endpoint) return;
+        await fetch(UNSUBSCRIBE_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ endpoint })
+        });
+      } catch (err) {
+        console.error('postUnsubscribe error', err);
+      }
     }
-
-    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-
-    const subscription = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey
-    });
-
-    // send to server
-    await sendSubscriptionToServer(subscription, jwtToken);
-
-    return subscription;
-  }
-
-  async function sendSubscriptionToServer(subscription, jwtToken) {
-    // Keep endpoint consistent with your server routes. Current server expects authenticated endpoints.
-    // You can change '/api/push/subscribe' if your server uses a different path.
-    const url = '/api/push/subscribe';
-    const headers = { 'Content-Type': 'application/json' };
-    if (jwtToken) headers['Authorization'] = 'Bearer ' + jwtToken;
-
-    const body = JSON.stringify({ subscription });
-
-    const res = await fetch(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers,
-      body
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error('Failed to register subscription on server: ' + (text || res.status));
-    }
-    return res.json().catch(() => ({}));
-  }
-
-  async function unregister(jwtToken) {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return;
-    const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
-
-    // notify server (best-effort)
-    try {
-      await fetch('/api/push/unsubscribe', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(jwtToken ? { 'Authorization': 'Bearer ' + jwtToken } : {})
-        },
-        body: JSON.stringify({ endpoint: sub.endpoint })
-      });
-    } catch (e) {
-      console.warn('Failed to notify server of unsubscribe:', e);
-    }
-
-    try {
-      await sub.unsubscribe();
-    } catch (e) {
-      console.warn('Error during unsubscribe:', e);
-    }
-  }
-
-  async function getSubscription() {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return null;
-    return reg.pushManager.getSubscription();
-  }
-
-  // Expose API
-  window.pushClient = {
-    registerServiceWorker,
-    subscribeForPush,
-    unregister,
-    getSubscription
   };
 
-  // Relay messages from SW to the app: "stalk:notification-click"
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.addEventListener('message', (ev) => {
-      const data = ev.data || {};
-      if (data && data.type === 'notification-click') {
-        window.dispatchEvent(new CustomEvent('stalk:notification-click', { detail: data.data }));
+  // Expose globally
+  window.pushClient = pushClient;
+
+  // Auto-init if app already logged in
+  document.addEventListener('DOMContentLoaded', () => {
+    // Don't auto-run subscribe unless user is logged in
+    (async () => {
+      try {
+        // init SW and get key
+        await pushClient.init();
+        // if user token present, attempt subscribe automatically
+        if (localStorage.getItem('sTalk_token')) {
+          // give app a small delay to finish validateToken
+          setTimeout(() => { pushClient.subscribe().catch(()=>{}); }, 1200);
+        }
+      } catch (e) {
+        console.warn('pushClient auto-init failed', e);
       }
-      if (data && data.type === 'pushsubscriptionchange') {
-        // notify app to re-subscribe if desired
-        window.dispatchEvent(new Event('stalk:pushsubscriptionchange'));
-      }
-    });
-  }
+    })();
+  });
+
 })();
