@@ -85,6 +85,76 @@ This command updates the application code while preserving the database and uplo
 sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/update.sh)"
 ```
 
+### Update check (dry run update test)
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/update-check.sh | sudo bash
+
+```
+or
+
+```
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/update-check.sh)"
+
+```
+
+### Run rollback.sh (Restore DB + uploads + VAPID)
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/rollback.sh | sudo bash
+
+```
+```
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/rollback.sh)"
+
+```
+
+### Health check 
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/health-check.sh | sudo bash
+```
+```
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/health-check.sh)"
+```
+
+### Self repair from backups
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/self-repair.sh | sudo bash
+
+```
+
+```
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/self-repair.sh)"
+
+```
+
+### Clean old backups
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/cleanup-old-backups.sh | sudo bash
+
+```
+
+```
+BACKUP_DIR=/root DAYS=60 DRY_RUN=true sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/cleanup-old-backups.sh)"
+
+```
+
+### Log export
+
+```
+curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/log-export.sh | sudo bash
+
+```
+```
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/log-export.sh)"
+
+```
+
+
+
 ### Uninstall:
 ```
 sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/uninstall.sh)"
