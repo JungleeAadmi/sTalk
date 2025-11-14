@@ -781,6 +781,22 @@
             text-align: left;
         }
 
+        /* FIX: Ensure images sent in chat never exceed bubble width (prevents full-resolution overflowing) */
+        .message-bubble img,
+        .media-preview,
+        .media-message img,
+        .video-thumbnail,
+        .media-fullscreen-image,
+        .media-fullscreen-video {
+            max-width: 100%;
+            width: auto;
+            height: auto;
+            max-height: 320px; /* reasonable cap inside bubble; adjust if you want smaller */
+            border-radius: 12px;
+            object-fit: cover;
+            display: block;
+        }
+
         /* many other styles kept as-is (media messages, file previews, etc.) */
         /* ... (omitted here for brevity in commentary, but in file everything remains intact) */
 
