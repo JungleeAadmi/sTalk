@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Safe update script for sTalk (v2)
+# Safe update script for sTalk (v3)
 # - preserves database, uploads, and VAPID keys
-# - backups current DB & uploads & .vapid.json
-# - pulls latest git code from origin/main (or $GIT_BRANCH)
+# - backups current DB, uploads, .vapid.json and current code (tar)
+# - pulls latest git code from origin/$GIT_BRANCH
 # - installs dependencies and runs build if present
 # - runs migrations if scripts/migrate.sh exists
-# - reloads systemd if VAPID/systemd drop-in changed
-# - restarts detected systemd service
+# - creates/updates systemd drop-in with VAPID env vars
+# - reloads systemd when drop-in changed and restarts service (with retries)
 #
-# Run as root (recommended):
+# Usage (recommended as root):
 # sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/update.sh)"
 
 set -euo pipefail
@@ -21,7 +21,16 @@ DEFAULT_CANDIDATES=( "/opt/stalk" "/opt/sTalk" "/opt/sTalk-v2" "/opt/sTalk-*" )
 SERVICE_NAME_CANDIDATES=( "stalk" "sTalk" )
 SYSTEMD_DIR="/etc/systemd/system"
 TMPDIR="$(mktemp -d -t stalk-update-XXXX)"
+LOCK_FD=200
+LOCK_FILE="/var/lock/stalk-update.lock"
 trap 'rm -rf "${TMPDIR}"' EXIT
+
+# --- Acquire exclusive lock so multiple updates don't collide ---
+exec ${LOCK_FD}>"${LOCK_FILE}"
+if ! flock -n ${LOCK_FD}; then
+  printf "\033[1;31m❌ Another update process is running. Exiting.\033[0m\n"
+  exit 1
+fi
 
 # --- helpers ---
 info(){ printf "\033[1;34mℹ️  %s\033[0m\n" "$*"; }
@@ -34,6 +43,7 @@ APP_DIR="${APP_DIR:-}"
 
 if [ -z "$APP_DIR" ]; then
   for cand in "${DEFAULT_CANDIDATES[@]}"; do
+    # expand globs safely
     for match in $(compgen -G "$cand" 2>/dev/null || true); do
       if [ -d "$match" ]; then
         APP_DIR="$match"
@@ -62,6 +72,7 @@ UPLOADS_DIR="$APP_DIR/uploads"
 VAPID_FILE="$APP_DIR/.vapid.json"
 SYSTEMD_DROPIN_DIR="/etc/systemd/system/stalk.service.d"
 SYSTEMD_VAPID_CONF="${SYSTEMD_DROPIN_DIR}/vapid.conf"
+CODE_BACKUP="${BACKUP_DIR}/stalk-code-${TIMESTAMP}.tar.gz"
 
 info "Using app directory: $APP_DIR"
 info "DB path (if exists): $DB_FILE"
@@ -72,15 +83,14 @@ info "Checking for existing VAPID at: $VAPID_FILE"
 VAPID_BAK="${BACKUP_DIR}/.vapid.json.${TIMESTAMP}.bak"
 if [ -f "${VAPID_FILE}" ]; then
   info "Backing up existing VAPID -> ${VAPID_BAK}"
-  cp -f "${VAPID_FILE}" "${VAPID_BAK}" || warn "Failed to backup VAPID (permission?)"
-  ok "VAPID backup created"
+  if cp -f "${VAPID_FILE}" "${VAPID_BAK}"; then ok "VAPID backup created"; else warn "Failed to backup VAPID (permission?)"; fi
 fi
 
 # --- auto-backup database and uploads ---
 if [ -f "$DB_FILE" ]; then
   DB_BAK="${BACKUP_DIR}/stalk.db.${TIMESTAMP}.bak"
   info "Backing up DB -> $DB_BAK"
-  cp "$DB_FILE" "$DB_BAK"
+  cp -f "$DB_FILE" "$DB_BAK"
   ok "DB backup created"
 else
   warn "No DB file found at $DB_FILE (skipping DB backup)."
@@ -93,6 +103,13 @@ if [ -d "$UPLOADS_DIR" ]; then
   ok "Uploads backup created"
 else
   warn "No uploads directory found at $UPLOADS_DIR (skipping uploads backup)."
+fi
+
+# --- backup current code (non-destructive) ---
+if [ -d "$APP_DIR" ]; then
+  info "Backing up current application code -> ${CODE_BACKUP}"
+  tar -C "$(dirname "$APP_DIR")" -czf "${CODE_BACKUP}" "$(basename "$APP_DIR")" || warn "Code backup failed"
+  ok "Code backup created (may be large)"
 fi
 
 # --- detect systemd service name ---
@@ -110,13 +127,25 @@ else
   info "Detected systemd service: ${SERVICE_NAME}.service"
 fi
 
-# --- stop service safely if active ---
-if systemctl is-active --quiet "${SERVICE_NAME}.service" 2>/dev/null || systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service" 2>/dev/null; then
-  info "Stopping service ${SERVICE_NAME}.service..."
-  systemctl stop "${SERVICE_NAME}.service" || warn "Failed to stop ${SERVICE_NAME}.service (continuing)"
-else
-  warn "Service ${SERVICE_NAME}.service not active or not present (continuing)"
-fi
+# --- stop service safely if active (with timeout) ---
+stop_service() {
+  if systemctl is-active --quiet "${SERVICE_NAME}.service" 2>/dev/null; then
+    info "Stopping service ${SERVICE_NAME}.service..."
+    systemctl stop "${SERVICE_NAME}.service" || warn "systemctl stop returned non-zero"
+    # wait up to 10s for stop
+    for i in {1..10}; do
+      if ! systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+        ok "Service stopped"
+        return 0
+      fi
+      sleep 1
+    done
+    warn "Service did not stop promptly"
+  else
+    info "Service not active (no need to stop)"
+  fi
+}
+stop_service
 
 # --- preserve existing systemd VAPID drop-in if present ---
 DROPIN_BAK=""
@@ -131,26 +160,29 @@ fi
 if [ -d "$APP_DIR/.git" ]; then
   info "Updating code from git (branch: $GIT_BRANCH)..."
   pushd "$APP_DIR" >/dev/null
-  git fetch --all --prune
-  # ensure branch exists locally
-  if git rev-parse --verify "origin/${GIT_BRANCH}" >/dev/null 2>&1; then
-    git checkout "$GIT_BRANCH" || git checkout -B "$GIT_BRANCH"
-    git reset --hard "origin/${GIT_BRANCH}"
+  git fetch --all --prune --quiet
+  if git ls-remote --exit-code --heads origin "${GIT_BRANCH}" >/dev/null 2>&1; then
+    # checkout or create local branch tracking origin
+    if git rev-parse --verify "$GIT_BRANCH" >/dev/null 2>&1; then
+      git checkout "$GIT_BRANCH" --quiet
+    else
+      git checkout -b "$GIT_BRANCH" --track "origin/$GIT_BRANCH" --quiet || git checkout -B "$GIT_BRANCH"
+    fi
+    git reset --hard "origin/${GIT_BRANCH}" --quiet
+    ok "Code updated to origin/${GIT_BRANCH}"
   else
-    warn "Remote branch origin/${GIT_BRANCH} not found, staying on current branch"
+    warn "Remote branch origin/${GIT_BRANCH} not found, skipping git reset"
   fi
   popd >/dev/null
-  ok "Code updated"
 else
   warn "No .git directory in $APP_DIR — manual deploys not supported by this script. Please deploy manually."
 fi
 
 # --- node deps & build ---
 if [ -f "$APP_DIR/package.json" ]; then
-  info "Installing Node dependencies (npm ci --prefer-offline --no-audit --production preferred)..."
+  info "Installing Node dependencies (preferring npm ci)..."
   pushd "$APP_DIR" >/dev/null
   if command -v npm >/dev/null 2>&1; then
-    # try npm ci first for reproducible builds; fallback to npm install
     if npm ci --production --prefer-offline --no-audit --silent >/dev/null 2>&1; then
       ok "npm ci completed"
     else
@@ -191,58 +223,105 @@ fi
 # --- restore VAPID (if repo removed it) ---
 if [ -f "${VAPID_BAK}" ] && [ ! -f "${VAPID_FILE}" ]; then
   info "Restoring previously backed up VAPID to application dir..."
-  cp -f "${VAPID_BAK}" "${VAPID_FILE}" || warn "Failed to restore VAPID file"
-  chown --reference="${APP_DIR}" "${VAPID_FILE}" 2>/dev/null || true
-  chmod 600 "${VAPID_FILE}" || true
-  ok "VAPID restored"
+  if cp -f "${VAPID_BAK}" "${VAPID_FILE}"; then
+    chmod 600 "${VAPID_FILE}" || true
+    ok "VAPID restored"
+  else
+    warn "Failed to restore VAPID file"
+  fi
 fi
 
-# --- reload systemd if drop-in exists or was created by upgrade ---
+# --- create/update systemd drop-in from .vapid.json if present ---
 RELOAD_SYSTEMD=false
-if [ -d "${SYSTEMD_DROPIN_DIR}" ] || [ -f "${SYSTEMD_VAPID_CONF}" ]; then
-  info "Ensuring systemd drop-in location exists: ${SYSTEMD_DROPIN_DIR}"
-  mkdir -p "${SYSTEMD_DROPIN_DIR}" || true
-  RELOAD_SYSTEMD=true
-fi
-
-# If repo now contains a .vapid.json (new), ensure systemd drop-in exists and set flags
 if [ -f "${VAPID_FILE}" ]; then
-  # attempt to extract keys and write drop-in if not present (safe, minimal)
-  if [ ! -f "${SYSTEMD_VAPID_CONF}" ]; then
-    info "Creating systemd drop-in to inject VAPID env vars"
-    # Extract safe values (public/private) using sed (do not rely on jq/node here)
+  # extract keys (try jq, node, then sed)
+  VAPID_PUBLIC=""
+  VAPID_PRIVATE=""
+  if command -v jq >/dev/null 2>&1; then
+    VAPID_PUBLIC=$(jq -r '.publicKey // empty' "${VAPID_FILE}" 2>/dev/null || true)
+    VAPID_PRIVATE=$(jq -r '.privateKey // empty' "${VAPID_FILE}" 2>/dev/null || true)
+  fi
+  if [ -z "$VAPID_PUBLIC" ] || [ -z "$VAPID_PRIVATE" ]; then
+    if command -v node >/dev/null 2>&1; then
+      VAPID_PUBLIC=$(node -e "try{console.log(require(process.argv[1]).publicKey)}catch(e){process.exit(0)}" "${VAPID_FILE}" 2>/dev/null || true)
+      VAPID_PRIVATE=$(node -e "try{console.log(require(process.argv[1]).privateKey)}catch(e){process.exit(0)}" "${VAPID_FILE}" 2>/dev/null || true)
+    fi
+  fi
+  if [ -z "$VAPID_PUBLIC" ] || [ -z "$VAPID_PRIVATE" ]; then
+    # last resort use sed (fragile but may work)
     VAPID_PUBLIC="$(sed -n 's/.*\"publicKey\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' "${VAPID_FILE}" || true)"
     VAPID_PRIVATE="$(sed -n 's/.*\"privateKey\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' "${VAPID_FILE}" || true)"
-    if [ -n "${VAPID_PUBLIC}" ] && [ -n "${VAPID_PRIVATE}" ]; then
-      cat > "${SYSTEMD_VAPID_CONF}" <<EOF
+  fi
+
+  if [ -n "${VAPID_PUBLIC}" ] && [ -n "${VAPID_PRIVATE}" ]; then
+    mkdir -p "${SYSTEMD_DROPIN_DIR}" || true
+    # compute existing content checksum
+    OLD_CHECKSUM=""
+    if [ -f "${SYSTEMD_VAPID_CONF}" ]; then OLD_CHECKSUM=$(sha256sum "${SYSTEMD_VAPID_CONF}" | awk '{print $1}') || true; fi
+
+    cat > "${SYSTEMD_VAPID_CONF}" <<EOF
 [Service]
 Environment=VAPID_PUBLIC_KEY=${VAPID_PUBLIC}
 Environment=VAPID_PRIVATE_KEY=${VAPID_PRIVATE}
 EOF
-      chmod 644 "${SYSTEMD_VAPID_CONF}" || true
+    chmod 644 "${SYSTEMD_VAPID_CONF}" || true
+
+    NEW_CHECKSUM=$(sha256sum "${SYSTEMD_VAPID_CONF}" | awk '{print $1}') || true
+    if [ "${OLD_CHECKSUM}" != "${NEW_CHECKSUM}" ]; then
       RELOAD_SYSTEMD=true
-      ok "Wrote systemd drop-in for VAPID"
+      ok "Wrote/updated systemd drop-in for VAPID"
     else
-      warn "Could not parse VAPID keys to write systemd drop-in; skipping drop-in creation"
+      info "Systemd drop-in unchanged"
     fi
+  else
+    warn "Could not parse VAPID keys; skipping systemd drop-in creation"
   fi
+fi
+
+if [ -d "${SYSTEMD_DROPIN_DIR}" ] || [ -f "${SYSTEMD_VAPID_CONF}" ]; then
+  RELOAD_SYSTEMD=true
 fi
 
 if [ "$RELOAD_SYSTEMD" = true ]; then
   info "Reloading systemd daemon to pick up any drop-ins..."
-  systemctl daemon-reload || warn "systemctl daemon-reload failed"
+  if systemctl daemon-reload; then ok "systemd daemon reloaded"; else warn "systemctl daemon-reload failed"; fi
 fi
 
-# --- start service ---
-info "Starting service ${SERVICE_NAME}.service..."
-if systemctl start "${SERVICE_NAME}.service"; then
-  ok "Service start requested"
+# --- start/restart service with retries ---
+start_service() {
+  attempts=0
+  max_attempts=4
+  until systemctl start "${SERVICE_NAME}.service"; do
+    attempts=$((attempts+1))
+    warn "Attempt ${attempts}/${max_attempts} - failed to start service"
+    if [ "$attempts" -ge "$max_attempts" ]; then
+      warn "Max attempts reached; printing recent journalctl and exiting with warning"
+      journalctl -u "${SERVICE_NAME}.service" -n 200 --no-pager || true
+      return 1
+    fi
+    sleep $((attempts * 2))
+  done
+  # confirm active
+  for i in {1..10}; do
+    if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+      ok "Service ${SERVICE_NAME}.service is active"
+      return 0
+    fi
+    sleep 1
+  done
+  warn "Service start requested but not reporting active state yet"
+  return 0
+}
+
+info "Starting (or restarting) service ${SERVICE_NAME}.service..."
+if start_service; then
+  ok "Service start sequence completed"
 else
-  warn "Failed to start ${SERVICE_NAME}.service (check logs)"
+  warn "Service start sequence encountered issues - check logs"
 fi
 
-# --- show logs ---
+# --- show recent logs for convenience ---
 info "Recent logs (last 200 lines) for ${SERVICE_NAME}.service:"
 journalctl -u "${SERVICE_NAME}.service" -n 200 --no-pager || true
 
-ok "Update completed. DB and uploads preserved under $APP_DIR (backups in $BACKUP_DIR if created)."
+ok "Update completed. Backups: DB=${DB_BAK:-none} uploads=${UP_BAK:-none} code=${CODE_BACKUP:-none} vapid=${VAPID_BAK:-none}"
