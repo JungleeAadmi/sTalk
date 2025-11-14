@@ -673,11 +673,7 @@
             transform: translateX(0);
         }
 
-<<<<<<< HEAD
-        /* Make header sticky so it remains visible during scroll & when keyboard opens */
-=======
         /* sticky header: will remain visible while messages scroll */
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
         .chat-header {
             background: var(--surface);
             padding: 1rem;
@@ -1164,22 +1160,10 @@
 
         /* Mobile Layout - safer approach (removed fixed html/body) */
         @media (max-width: 768px) {
-<<<<<<< HEAD
-            /* Removed position: fixed on html, body to avoid iOS PWA top-gap */
-=======
             /* Keep body scrollable to allow keyboard to resize viewport */
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
             html, body {
-<<<<<<< HEAD
-=======
-                /* Do not fix position; allow natural viewport changes */
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
                 width: 100%;
                 height: 100%;
-<<<<<<< HEAD
-                /* DO NOT set position: fixed here */
-=======
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
             }
 
             /* Force input elements visible */
@@ -1718,13 +1702,9 @@
 
             <div class="chat-detail-container" id="chatDetailContainer">
                 <div class="chat-header" id="chatHeader" style="display: none;">
-<<<<<<< HEAD
-                    <button class="back-btn" id="backBtn">←</button>
-                    <!-- NEW: header avatar slot inserted so profile picture shows between back and name -->
-                    <div class="chat-header-avatar" id="chatHeaderAvatar">A</div>
-=======
                     <button class="back-btn" id="backBtn" aria-label="Back">←</button>
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
+                    <!-- header avatar slot inserted so profile picture shows between back and name -->
+                    <div class="chat-header-avatar" id="chatHeaderAvatar">A</div>
                     <div class="chat-header-info">
                         <div class="chat-header-name" id="chatHeaderName">Select a user</div>
                         <div class="chat-header-status" id="chatHeaderStatus">to start messaging</div>
@@ -1773,7 +1753,6 @@
     <script src="app.js"></script>
     <!-- Push Notification Client -->
     <script src="/push-client.js"></script>
-<<<<<<< HEAD
 
     <!-- Helper script: keeps header sticky, adjusts messages area when keyboard appears, and exposes small API -->
     <script>
@@ -1901,49 +1880,5 @@
     })();
     </script>
 
-=======
-
-    <script>
-        // small helper to ensure message input is visible when keyboard opens
-        (function () {
-            const msgInput = document.getElementById('messageInput');
-            if (!msgInput) return;
-            msgInput.addEventListener('focus', () => {
-                // Scroll messages container to bottom so input is visible
-                setTimeout(() => {
-                    const messages = document.getElementById('messagesContainer');
-                    if (messages) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-                    // also ensure input is scrolled into view
-                    msgInput.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, 250);
-            });
-        })();
-
-        // Settings buttons wiring (small helper so push-client can attach after load)
-        document.addEventListener('DOMContentLoaded', () => {
-            // show settings
-            const settingsBtn = document.getElementById('settingsBtn');
-            const settingsModal = document.getElementById('settingsModal');
-            const closeSettings = document.getElementById('closeSettings');
-            const quickSettings = document.getElementById('quickSettingsItem');
-
-            const showSettings = () => {
-                settingsModal.classList.add('show');
-                settingsModal.setAttribute('aria-hidden', 'false');
-            };
-            const hideSettings = () => {
-                settingsModal.classList.remove('show');
-                settingsModal.setAttribute('aria-hidden', 'true');
-            };
-
-            settingsBtn && settingsBtn.addEventListener('click', showSettings);
-            closeSettings && closeSettings.addEventListener('click', hideSettings);
-            quickSettings && quickSettings.addEventListener('click', () => { hideSettings(); showSettings(); });
-        });
-    </script>
-
->>>>>>> a8af094d7254a74338fc19a8d195b515a8c384e6
 </body>
 </html>
