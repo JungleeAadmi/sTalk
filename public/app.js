@@ -48,28 +48,25 @@ class STalk {
 
     setupEventListeners() {
         // Login form
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.handleLogin();
-            });
-        }
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
 
         // Settings modal
-        const settingsBtn = document.getElementById('settingsBtn');
-        if (settingsBtn) settingsBtn.addEventListener('click', () => { this.showSettings(); });
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            this.showSettings();
+        });
 
-        const closeSettingsEl = document.getElementById('closeSettings');
-        if (closeSettingsEl) closeSettingsEl.addEventListener('click', () => { this.hideSettings(); });
+        document.getElementById('closeSettings').addEventListener('click', () => {
+            this.hideSettings();
+        });
 
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('change', (e) => {
-                this.toggleTheme();
-            });
-        }
+        themeToggle.addEventListener('change', (e) => {
+            this.toggleTheme();
+        });
 
         // Push toggle (settings UI element with id enablePushToggle is optional)
         const pushToggle = document.getElementById('enablePushToggle');
@@ -105,115 +102,98 @@ class STalk {
         }
 
         // Settings buttons
-        const changePasswordBtn = document.getElementById('changePasswordBtn');
-        if (changePasswordBtn) changePasswordBtn.addEventListener('click', () => { this.handleChangePassword(); });
+        document.getElementById('changePasswordBtn').addEventListener('click', () => {
+            this.handleChangePassword();
+        });
 
-        const adminStatsBtn = document.getElementById('adminStatsBtn');
-        if (adminStatsBtn) adminStatsBtn.addEventListener('click', () => { this.loadAdminStats(); });
+        document.getElementById('adminStatsBtn').addEventListener('click', () => {
+            this.loadAdminStats();
+        });
 
-        const userManagementBtn = document.getElementById('userManagementBtn');
-        if (userManagementBtn) userManagementBtn.addEventListener('click', () => { this.showUserManagement(); });
+        document.getElementById('userManagementBtn').addEventListener('click', () => {
+            this.showUserManagement();
+        });
 
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) logoutBtn.addEventListener('click', () => { this.handleLogout(); });
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.handleLogout();
+        });
 
         // Quick dropdown actions
-        const quickSettings = document.getElementById('quickSettingsItem');
-        if (quickSettings) quickSettings.addEventListener('click', () => { this.showSettings(); });
+        document.getElementById('quickSettingsItem').addEventListener('click', () => {
+            this.showSettings();
+        });
 
-        const quickLogout = document.getElementById('quickLogoutItem');
-        if (quickLogout) quickLogout.addEventListener('click', () => { this.handleLogout(); });
+        document.getElementById('quickLogoutItem').addEventListener('click', () => {
+            this.handleLogout();
+        });
 
         // Profile picture upload
-        const profileImageUpload = document.getElementById('profileImageUpload');
-        if (profileImageUpload) {
-            profileImageUpload.addEventListener('change', (e) => {
-                const file = e.target.files ? e.target.files[0] : null;
-                this.handleProfileImageUpload(file);
-            });
-        }
+        document.getElementById('profileImageUpload').addEventListener('change', (e) => {
+            this.handleProfileImageUpload(e.target.files[0]);
+        });
 
-        const profileAvatarLarge = document.getElementById('profileAvatarLarge');
-        if (profileAvatarLarge) {
-            profileAvatarLarge.addEventListener('click', () => {
-                const upload = document.getElementById('profileImageUpload');
-                if (upload) upload.click();
-            });
-        }
+        document.getElementById('profileAvatarLarge').addEventListener('click', () => {
+            document.getElementById('profileImageUpload').click();
+        });
 
         // File upload
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
-                if (e.target && e.target.files) this.handleFileUpload(e.target.files);
-            });
-        }
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            this.handleFileUpload(e.target.files);
+        });
 
-        const attachBtn = document.getElementById('attachBtn');
-        if (attachBtn) attachBtn.addEventListener('click', () => {
-            const fi = document.getElementById('fileInput');
-            if (fi) fi.click();
+        document.getElementById('attachBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
         });
 
         // Message input
         const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-            messageInput.addEventListener('input', (e) => {
-                this.autoResizeTextarea(e.target);
-                this.updateSendButton();
-                this.handleTyping();
-            });
+        messageInput.addEventListener('input', (e) => {
+            this.autoResizeTextarea(e.target);
+            this.updateSendButton();
+            this.handleTyping();
+        });
 
-            messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    this.sendMessage();
-                }
-            });
-        }
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
+        });
 
         // Send button
-        const sendBtn = document.getElementById('sendBtn');
-        if (sendBtn) sendBtn.addEventListener('click', () => { this.sendMessage(); });
+        document.getElementById('sendBtn').addEventListener('click', () => {
+            this.sendMessage();
+        });
 
         // User menu
-        const userAvatar = document.getElementById('userAvatar');
-        if (userAvatar) {
-            userAvatar.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleUserDropdown();
-            });
-        }
+        document.getElementById('userAvatar').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleUserDropdown();
+        });
 
         // User search
-        const userSearch = document.getElementById('userSearch');
-        if (userSearch) {
-            userSearch.addEventListener('input', (e) => {
-                this.filterUsers(e.target.value);
-            });
-        }
+        document.getElementById('userSearch').addEventListener('input', (e) => {
+            this.filterUsers(e.target.value);
+        });
 
         // Back button
-        const backBtn = document.getElementById('backBtn');
-        if (backBtn) backBtn.addEventListener('click', () => { this.showChatList(); });
+        document.getElementById('backBtn').addEventListener('click', () => {
+            this.showChatList();
+        });
 
         // Global click handlers
         document.addEventListener('click', (e) => {
-            if (!e.target.closest || !e.target.closest('.user-menu')) {
-                const dd = document.getElementById('userDropdown');
-                if (dd) dd.classList.remove('show');
+            if (!e.target.closest('.user-menu')) {
+                document.getElementById('userDropdown').classList.remove('show');
             }
         });
 
         // Settings modal backdrop click
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) {
-            settingsModal.addEventListener('click', (e) => {
-                if (e.target.id === 'settingsModal') {
-                    this.hideSettings();
-                }
-            });
-        }
+        document.getElementById('settingsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'settingsModal') {
+                this.hideSettings();
+            }
+        });
 
         // Drag and drop for files
         this.setupDragDrop();
@@ -225,24 +205,19 @@ class STalk {
 
         // Listen for messages from service worker (notification click deep-links)
         if ('serviceWorker' in navigator) {
-            try {
-                navigator.serviceWorker.addEventListener('message', (ev) => {
-                    if (ev.data && ev.data.type === 'notification-click') {
-                        // Data should contain { chatId, sender, url }
-                        this.handleNotificationClick(ev.data.data || {});
-                    }
-                });
-            } catch (e) {
-                // ignore if addEventListener not available
-            }
+            navigator.serviceWorker.addEventListener('message', (ev) => {
+                if (ev.data && ev.data.type === 'notification-click') {
+                    // Data should contain { chatId, sender, url }
+                    this.handleNotificationClick(ev.data.data || {});
+                }
+            });
         }
     }
 
     // Theme Management
     applyTheme(theme) {
         document.body.setAttribute('data-theme', theme);
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) themeToggle.checked = theme === 'dark';
+        document.getElementById('themeToggle').checked = theme === 'dark';
         localStorage.setItem('sTalk_theme', theme);
         this.currentTheme = theme;
     }
@@ -258,12 +233,10 @@ class STalk {
 
     // Settings Modal Management
     showSettings() {
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) settingsModal.classList.add('show');
+        document.getElementById('settingsModal').classList.add('show');
 
         if (this.currentUser && this.currentUser.role === 'Admin') {
-            const adminSection = document.getElementById('adminSection');
-            if (adminSection) adminSection.style.display = 'block';
+            document.getElementById('adminSection').style.display = 'block';
         }
 
         // ensure push/sound toggles reflect current state (if present)
@@ -276,7 +249,7 @@ class STalk {
         if (soundToggle) soundToggle.checked = !!this.soundEnabled;
 
         const avatarLarge = document.getElementById('profileAvatarLarge');
-        if (this.currentUser && avatarLarge) {
+        if (this.currentUser) {
             if (this.currentUser.profileImage) {
                 avatarLarge.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 avatarLarge.textContent = '';
@@ -288,8 +261,7 @@ class STalk {
     }
 
     hideSettings() {
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) settingsModal.classList.remove('show');
+        document.getElementById('settingsModal').classList.remove('show');
     }
 
     // Notification click handler (deep-link)
@@ -301,7 +273,7 @@ class STalk {
             if (found) {
                 // open chat with that user
                 await this.selectUser(found.id);
-                try { window.focus(); } catch(e){}
+                window.focus();
                 return;
             }
         }
@@ -309,13 +281,13 @@ class STalk {
         // fallback: if chatId provided, try to deduce username from chatId
         if (data.chatId) {
             // chatId format created by server: userA_userB (alphabetical). Find other participant
-            const parts = (data.chatId || '').split('_');
+            const parts = data.chatId.split('_');
             const other = parts.find(p => p !== this.currentUser.username);
             if (other) {
                 const found = Array.from(this.users.values()).find(u => u.username === other);
                 if (found) {
                     await this.selectUser(found.id);
-                    try { window.focus(); } catch(e){}
+                    window.focus();
                     return;
                 }
             }
@@ -334,7 +306,7 @@ class STalk {
         if (this.isProcessingUserManagement) return;
         this.isProcessingUserManagement = true;
 
-        if (!this.currentUser || this.currentUser.role !== 'Admin') {
+        if (this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             this.isProcessingUserManagement = false;
             return;
@@ -676,16 +648,13 @@ class STalk {
 
             if (response.ok) {
                 const result = await response.json();
-                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.profileImage = result.profileImage;
                 this.updateUserInterface();
                 this.showToast('✅ Profile image updated!', 'success');
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                if (avatarLarge) {
-                    avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
-                    avatarLarge.textContent = '';
-                }
+                avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
+                avatarLarge.textContent = '';
             } else {
                 const error = await response.json();
                 this.showToast(`❌ ${error.error || 'Upload failed'}`, 'error');
@@ -721,20 +690,15 @@ class STalk {
             });
 
             if (response.ok) {
-                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.avatar = value;
                 this.currentUser.profileImage = null;
                 this.updateUserInterface();
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                if (avatarLarge) {
-                    avatarLarge.style.backgroundImage = '';
-                    avatarLarge.textContent = value;
-                }
+                avatarLarge.style.backgroundImage = '';
+                avatarLarge.textContent = value;
 
                 this.showToast('✅ Avatar updated!', 'success');
-            } else {
-                this.showToast('❌ Failed to update avatar', 'error');
             }
         } catch (error) {
             this.showToast('❌ Failed to update avatar', 'error');
@@ -743,7 +707,6 @@ class STalk {
 
     setupDragDrop() {
         const messageContainer = document.getElementById('messagesContainer');
-        if (!messageContainer) return;
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             messageContainer.addEventListener(eventName, this.preventDefaults, false);
@@ -762,18 +725,18 @@ class STalk {
         });
 
         messageContainer.addEventListener('drop', (e) => {
-            const files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
+            const files = e.dataTransfer.files;
             this.handleFileUpload(files);
         }, false);
     }
 
     preventDefaults(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        if (e && e.stopPropagation) e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
     }
 
     async handleFileUpload(files) {
-        if (!files || files.length === 0 || !this.selectedUserId) {
+        if (!files.length || !this.selectedUserId) {
             if (!this.selectedUserId) {
                 this.showToast('Please select a user to share files with', 'error');
             }
@@ -831,8 +794,7 @@ class STalk {
             this.showToast('❌ Upload failed. Please check your connection.', 'error');
         }
 
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) fileInput.value = '';
+        document.getElementById('fileInput').value = '';
     }
 
     async sendFileMessage(fileInfo) {
@@ -863,10 +825,8 @@ class STalk {
 
     // Authentication methods - Same as before (with push init on successful login)
     async handleLogin() {
-        const usernameEl = document.getElementById('loginUsername');
-        const passwordEl = document.getElementById('loginPassword');
-        const username = usernameEl ? usernameEl.value.trim() : '';
-        const password = passwordEl ? passwordEl.value : '';
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
 
         if (!username || !password) {
             this.showAlert('Please enter both username and password', 'error');
@@ -978,7 +938,7 @@ class STalk {
     }
 
     async loadAdminStats() {
-        if (!this.currentUser || this.currentUser.role !== 'Admin') {
+        if (this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             return;
         }
@@ -1029,7 +989,7 @@ class STalk {
         localStorage.removeItem('sTalk_user');
 
         if (this.socket) {
-            try { this.socket.disconnect(); } catch(e){}
+            this.socket.disconnect();
         }
 
         this.hideSettings();
@@ -1094,11 +1054,11 @@ class STalk {
     updateUserInterface() {
         const userName = document.getElementById('userName');
         const userUsername = document.getElementById('userUsername');
-        if (userName && this.currentUser) userName.textContent = this.currentUser.fullName || '';
-        if (userUsername && this.currentUser) userUsername.textContent = `@${this.currentUser.username || ''}`;
+        if (userName) userName.textContent = this.currentUser.fullName;
+        if (userUsername) userUsername.textContent = `@${this.currentUser.username}`;
 
         const userAvatar = document.getElementById('userAvatar');
-        if (userAvatar && this.currentUser) {
+        if (userAvatar) {
             if (this.currentUser.profileImage) {
                 userAvatar.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 userAvatar.style.backgroundSize = 'cover';
@@ -1113,18 +1073,11 @@ class STalk {
 
     // Socket connection with unread message tracking
     connectSocket() {
-        try {
-            this.socket = io();
-        } catch (e) {
-            console.warn('Socket.IO not available or failed to initialize', e);
-            return;
-        }
-
-        if (!this.socket) return;
+        this.socket = io();
 
         this.socket.on('connect', () => {
             console.log('🔌 Connected to sTalk server');
-            try { this.socket.emit('join_user_room', this.currentUser.id); } catch(e){}
+            this.socket.emit('join_user_room', this.currentUser.id);
         });
 
         this.socket.on('disconnect', () => {
@@ -1139,7 +1092,7 @@ class STalk {
             if (window.innerWidth > 768) {
                 this.showToast('📡 Connection restored!', 'success');
             }
-            try { this.socket.emit('join_user_room', this.currentUser.id); } catch(e){}
+            this.socket.emit('join_user_room', this.currentUser.id);
         });
 
         this.socket.on('message_received', (message) => {
@@ -1240,7 +1193,7 @@ class STalk {
             });
 
             notification.onclick = () => {
-                try { window.focus(); } catch(e){}
+                window.focus();
                 notification.close();
             };
 
@@ -1533,7 +1486,7 @@ class STalk {
 
         if (!userList) return;
 
-        if (!users || users.length === 0) {
+        if (users.length === 0) {
             userList.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">👥</div>
@@ -1566,7 +1519,7 @@ class STalk {
         }).join('');
 
         userList.innerHTML = usersHTML;
-        this.users = new Map((users || []).map(user => [user.id, user]));
+        this.users = new Map(users.map(user => [user.id, user]));
     }
 
     updateUserListUnreadIndicators() {
@@ -1578,13 +1531,13 @@ class STalk {
 
                 if (count > 0) {
                     userItem.classList.add('has-unread');
-                    if (nameElement) nameElement.classList.add('unread');
-                    if (statusElement) statusElement.textContent = `${count} unread messages`;
+                    nameElement.classList.add('unread');
+                    statusElement.textContent = `${count} unread messages`;
                 } else {
                     userItem.classList.remove('has-unread');
-                    if (nameElement) nameElement.classList.remove('unread');
+                    nameElement.classList.remove('unread');
                     const user = this.users.get(userId);
-                    if (statusElement) statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
+                    statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
                 }
             }
         });
@@ -1617,33 +1570,6 @@ class STalk {
         const messageInputContainer = document.getElementById('messageInputContainer');
         if (messageInputContainer) messageInputContainer.style.display = 'flex';
 
-        // NEW: set header avatar slot and dispatch chat:selected event so index.html helper handles viewport/scrolling
-        try {
-            const headerAvatar = document.getElementById('chatHeaderAvatar');
-            if (headerAvatar) {
-                if (user.profileImage) {
-                    headerAvatar.style.backgroundImage = `url(${user.profileImage})`;
-                    headerAvatar.textContent = '';
-                } else {
-                    headerAvatar.style.backgroundImage = '';
-                    // prefer emoji avatar, fallback to initial
-                    const avatarText = user.avatar || (user.fullName ? user.fullName.charAt(0).toUpperCase() : (user.username ? user.username.charAt(0).toUpperCase() : 'U'));
-                    headerAvatar.textContent = avatarText;
-                }
-            }
-
-            // Dispatch event for header helpers (index.html listens for 'chat:selected')
-            window.dispatchEvent(new CustomEvent('chat:selected', {
-                detail: {
-                    name: user.fullName,
-                    status: user.isOnline ? 'Online' : 'Offline',
-                    avatar: user.profileImage ? user.profileImage : (user.avatar || (user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'))
-                }
-            }));
-        } catch (e) {
-            console.warn('Failed to update chat header avatar/event', e);
-        }
-
         await this.loadMessages(userId);
         this.showChatDetail();
 
@@ -1668,12 +1594,6 @@ class STalk {
             if (response.ok) {
                 const messages = await response.json();
                 this.renderMessages(messages);
-                // preserve header visibility while scrolling to bottom if helper exists
-                if (window.appScrollToBottom) {
-                    window.appScrollToBottom(true);
-                } else {
-                    this.scrollToBottom();
-                }
             } else {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1699,7 +1619,7 @@ class STalk {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
 
-        if (!messages || messages.length === 0) {
+        if (messages.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">💬</div>
@@ -1900,7 +1820,6 @@ class STalk {
     }
 
     getFileIcon(mimeType) {
-        if (!mimeType) return '📎';
         if (mimeType.startsWith('image/')) return '🖼️';
         if (mimeType.startsWith('audio/')) return '🎵';
         if (mimeType.startsWith('video/')) return '🎥';
@@ -1913,18 +1832,16 @@ class STalk {
 
     async sendMessage() {
         const input = document.getElementById('messageInput');
-        const content = input ? input.value.trim() : '';
+        const content = input.value.trim();
 
         if (!content || !this.selectedUserId) return;
 
         const sendBtn = document.getElementById('sendBtn');
-        if (sendBtn) sendBtn.disabled = true;
+        sendBtn.disabled = true;
 
-        if (input) {
-            input.value = '';
-            this.autoResizeTextarea(input);
-            this.updateSendButton();
-        }
+        input.value = '';
+        this.autoResizeTextarea(input);
+        this.updateSendButton();
 
         try {
             const response = await fetch(`${this.API_BASE}/chats/${this.selectedUserId}/messages`, {
@@ -1940,22 +1857,18 @@ class STalk {
                 const message = await response.json();
                 this.addMessageToUI(message, true);
             } else {
-                if (input) {
-                    input.value = content;
-                    this.autoResizeTextarea(input);
-                    this.updateSendButton();
-                }
-                this.showToast('❌ Failed to send message', 'error');
-            }
-        } catch (error) {
-            if (input) {
                 input.value = content;
                 this.autoResizeTextarea(input);
                 this.updateSendButton();
+                this.showToast('❌ Failed to send message', 'error');
             }
+        } catch (error) {
+            input.value = content;
+            this.autoResizeTextarea(input);
+            this.updateSendButton();
             this.showToast('❌ Connection error', 'error');
         } finally {
-            if (sendBtn) sendBtn.disabled = false;
+            sendBtn.disabled = false;
         }
     }
 
@@ -1989,18 +1902,13 @@ class STalk {
         container.appendChild(messageDiv);
 
         if (scroll) {
-            // Prefer the index.html helper that keeps header visible when scrolling
-            if (window.appScrollToBottom) {
-                window.appScrollToBottom(true);
-            } else {
-                this.scrollToBottom();
-            }
+            this.scrollToBottom();
         }
     }
 
     // Utility methods
     formatFileSize(bytes) {
-        if (!bytes || bytes === 0) return '0 Bytes';
+        if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -2013,19 +1921,13 @@ class STalk {
         // SQLite timestamps are in UTC format "YYYY-MM-DD HH:MM:SS"
         // We need to explicitly treat them as UTC, then convert to local time
         let date;
-        try {
-            if (timestamp.includes('T')) {
-                // Already in ISO format
-                date = new Date(timestamp);
-            } else {
-                // SQLite format - add 'Z' to indicate UTC
-                date = new Date(timestamp.replace(' ', 'T') + 'Z');
-            }
-        } catch (e) {
+        if (timestamp.includes('T')) {
+            // Already in ISO format
             date = new Date(timestamp);
+        } else {
+            // SQLite format - add 'Z' to indicate UTC
+            date = new Date(timestamp.replace(' ', 'T') + 'Z');
         }
-
-        if (!(date instanceof Date) || isNaN(date.getTime())) return '';
 
         const day = date.getDate();
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -2042,7 +1944,6 @@ class STalk {
     }
 
     autoResizeTextarea(textarea) {
-        if (!textarea) return;
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     }
@@ -2050,7 +1951,7 @@ class STalk {
     updateSendButton() {
         const input = document.getElementById('messageInput');
         const btn = document.getElementById('sendBtn');
-        if (btn) btn.disabled = !input || !input.value.trim();
+        if (btn) btn.disabled = !input.value.trim();
     }
 
     handleTyping() {
@@ -2059,28 +1960,23 @@ class STalk {
 
         if (!this.isTyping) {
             this.isTyping = true;
-            try {
-                this.socket.emit('typing_start', {
-                    userId: this.currentUser.id,
-                    userName: this.currentUser.fullName
-                });
-            } catch (e) {}
+            this.socket.emit('typing_start', {
+                userId: this.currentUser.id,
+                userName: this.currentUser.fullName
+            });
         }
 
-        if (this.typingTimeout) clearTimeout(this.typingTimeout);
+        clearTimeout(this.typingTimeout);
         this.typingTimeout = setTimeout(() => {
             this.isTyping = false;
-            try {
-                this.socket.emit('typing_stop', {
-                    userId: this.currentUser.id
-                });
-            } catch (e) {}
+            this.socket.emit('typing_stop', {
+                userId: this.currentUser.id
+            });
         }, 1000);
     }
 
     showTypingIndicator(userName, isTyping) {
         const status = document.getElementById('chatHeaderStatus');
-        if (!status) return;
         if (isTyping) {
             status.textContent = `${userName} is typing...`;
             status.style.fontStyle = 'italic';
@@ -2104,8 +2000,7 @@ class STalk {
                 if (!indicator) {
                     const newIndicator = document.createElement('div');
                     newIndicator.className = 'online-indicator';
-                    const avatarEl = userItem.querySelector('.user-item-avatar');
-                    if (avatarEl) avatarEl.appendChild(newIndicator);
+                    userItem.querySelector('.user-item-avatar').appendChild(newIndicator);
                 }
                 if (unreadCount === 0 && status) {
                     status.textContent = '🟢 Online';
@@ -2167,7 +2062,7 @@ class STalk {
 
     filterUsers(searchTerm) {
         const userItems = document.querySelectorAll('.user-item');
-        const term = (searchTerm || '').toLowerCase();
+        const term = searchTerm.toLowerCase();
 
         userItems.forEach(item => {
             const name = (item.querySelector('.user-item-name')?.textContent || '').toLowerCase();

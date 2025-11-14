@@ -673,7 +673,6 @@
             transform: translateX(0);
         }
 
-        /* sticky header: will remain visible while messages scroll */
         .chat-header {
             background: var(--surface);
             padding: 1rem;
@@ -681,9 +680,6 @@
             display: flex;
             align-items: center;
             gap: 1rem;
-            position: sticky;
-            top: 0;
-            z-index: 120;
         }
 
         .back-btn {
@@ -701,23 +697,6 @@
             background: var(--surface-variant);
         }
 
-        /* header avatar slot */
-        .chat-header-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--primary-color);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            flex-shrink: 0;
-            background-size: cover;
-            background-position: center;
-        }
-
         .chat-header-info {
             flex: 1;
         }
@@ -725,9 +704,6 @@
         .chat-header-name {
             font-weight: 600;
             margin-bottom: 0.25rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .chat-header-status {
@@ -740,8 +716,6 @@
             overflow-y: auto;
             padding: 1rem;
             background: var(--surface-dark);
-            /* Ensure content doesn't hide under sticky header - extra top padding */
-            padding-top: 0.75rem;
         }
 
         .messages-container.drag-over {
@@ -801,10 +775,262 @@
             text-align: left;
         }
 
-        /* many other styles kept as-is (media messages, file previews, etc.) */
-        /* ... (omitted here for brevity in commentary, but in file everything remains intact) */
+        /* Enhanced media message styles */
+        .media-message {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-width: 300px;
+        }
 
-        /* Message input area */
+        .media-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .media-preview:hover {
+            transform: scale(1.02);
+        }
+
+        .video-message .video-preview {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+        }
+
+        .play-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: background 0.2s ease;
+        }
+
+        .play-button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .audio-message .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .audio-icon {
+            font-size: 1.5rem;
+        }
+
+        .audio-player {
+            flex: 1;
+            height: 30px;
+        }
+
+        .media-info {
+            padding: 0.5rem 0;
+        }
+
+        .media-name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .media-size {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+
+        /* Link preview styles */
+        .message-link {
+            color: inherit;
+            text-decoration: underline;
+            transition: opacity 0.2s ease;
+        }
+
+        .message-link:hover {
+            opacity: 0.8;
+        }
+
+        .link-preview {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .link-preview:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .link-preview-favicon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .link-preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .link-preview-title {
+            font-weight: 600;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .link-preview-url {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .link-preview-arrow {
+            font-size: 1rem;
+            opacity: 0.7;
+            flex-shrink: 0;
+        }
+
+        /* Fullscreen media overlay */
+        .media-fullscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+
+        .media-fullscreen-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        .media-fullscreen-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: background 0.2s ease;
+        }
+
+        .media-fullscreen-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .media-fullscreen-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .media-fullscreen-video {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+        }
+
+        .media-fullscreen-title {
+            position: absolute;
+            bottom: -40px;
+            left: 0;
+            color: white;
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+
+        /* File message styles (for non-media files) */
+        .file-message {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-icon {
+            font-size: 1.5rem;
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .file-download {
+            font-size: 1.2rem;
+            text-decoration: none;
+            color: inherit;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+
+        .file-download:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
         .message-input-container {
             background: var(--background);
             border-top: 1px solid var(--border);
@@ -1158,12 +1384,13 @@
             background: var(--surface-variant);
         }
 
-        /* Mobile Layout - safer approach (removed fixed html/body) */
+        /* Mobile Layout - Chat header replaces app header */
         @media (max-width: 768px) {
-            /* Keep body scrollable to allow keyboard to resize viewport */
             html, body {
+                position: fixed;
                 width: 100%;
                 height: 100%;
+                overflow: hidden;
             }
 
             /* Force input elements visible */
@@ -1248,8 +1475,6 @@
                 padding: 1rem;
                 z-index: 100;
                 border-bottom: none;
-                position: sticky;
-                top: 0;
             }
 
             .chat-header .back-btn {
@@ -1285,10 +1510,9 @@
                 background: var(--surface-variant);
                 max-height: calc(100vh - 60px - 80px);
                 min-height: 200px;
-                padding-bottom: 90px; /* leave space for input */
             }
 
-            /* Input ABSOLUTELY placed at bottom inside chat-detail (absolute to allow keyboard) */
+            /* Input ABSOLUTELY fixed at bottom - FORCE VISIBLE */
             .message-input-container,
             .chat-detail-container .message-input-container,
             #messageInputContainer {
@@ -1313,7 +1537,7 @@
         /* Mobile fixes (extra safety block for very small viewports) */
         @media (max-width: 768px) {
             body {
-                /* allow body scroll (do not lock) */
+                overflow: hidden;
             }
 
             .app {
@@ -1361,86 +1585,6 @@
             }
         }
 
-        /* iOS Instruction modal - Option B */
-        .ios-modal {
-            position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%) scale(0.98);
-            width: 92%;
-            max-width: 420px;
-            background: var(--background);
-            border-radius: 16px;
-            padding: 1.25rem;
-            box-shadow: var(--shadow-heavy);
-            z-index: 4000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.18s ease;
-            border: 1px solid var(--border);
-        }
-
-        .ios-modal.show {
-            opacity: 1;
-            visibility: visible;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        .ios-modal h3 {
-            margin-bottom: 0.5rem;
-            font-size: 1.125rem;
-        }
-
-        .ios-modal p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-bottom: 1rem;
-        }
-
-        .ios-step {
-            display: flex;
-            gap: 0.5rem;
-            align-items: flex-start;
-            margin-bottom: 0.75rem;
-        }
-
-        .ios-step .step-num {
-            background: var(--surface);
-            color: var(--text-primary);
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-        }
-
-        .ios-modal .modal-actions {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
-            margin-top: 0.5rem;
-        }
-
-        .ios-modal .btn-ghost {
-            background: transparent;
-            border: 1px solid var(--border);
-            padding: 0.6rem 0.85rem;
-            border-radius: 10px;
-            cursor: pointer;
-        }
-
-        .ios-modal .btn-primary {
-            padding: 0.6rem 0.85rem;
-            border-radius: 10px;
-        }
-
-        .small-note {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-        }
     </style>
     <!-- Favicons & app icons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -1449,25 +1593,33 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#3b82f6">
 
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Windows tile -->
+    <meta name="msapplication-TileColor" content="#1e293b">
+    <meta name="msapplication-TileImage" content="/mstile-144x144.png">
+
 </head>
 <body data-theme="light">
     <!-- Toast Container - Desktop only -->
-    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div id="toastContainer" class="toast-container"></div>
 
     <!-- Loading Screen -->
-    <div id="loadingScreen" class="loading-screen" role="status" aria-hidden="true">
-        <div class="spinner" aria-hidden="true"></div>
+    <div id="loadingScreen" class="loading-screen">
+        <div class="spinner"></div>
         <div style="margin-top: 1rem; color: var(--text-secondary);">Loading sTalk...</div>
     </div>
 
     <!-- Login Screen -->
-    <div id="loginScreen" class="login-screen d-none" aria-hidden="true">
+    <div id="loginScreen" class="login-screen d-none">
         <div class="login-card">
             <div class="login-logo">
                 <h1>sTalk</h1>
             </div>
 
-            <div id="loginAlert" role="alert"></div>
+            <div id="loginAlert"></div>
 
             <form id="loginForm">
                 <div class="form-group">
@@ -1502,13 +1654,12 @@
         </div>
     </div>
 
-    
     <!-- Settings Modal -->
-    <div id="settingsModal" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div id="settingsModal" class="settings-modal">
         <div class="settings-content">
             <div class="settings-header">
-                <h2 class="settings-title" id="settingsTitle">Settings</h2>
-                <button class="close-btn" id="closeSettings" aria-label="Close settings">×</button>
+                <h2 class="settings-title">Settings</h2>
+                <button class="close-btn" id="closeSettings">×</button>
             </div>
 
             <div class="settings-section">
@@ -1518,43 +1669,12 @@
                         <div class="setting-label">Dark Mode</div>
                         <div class="setting-description">Switch between light and dark themes</div>
                     </div>
-                    <label class="theme-toggle" title="Toggle dark mode">
-                        <input type="checkbox" id="themeToggle" aria-label="Toggle dark mode">
+                    <label class="theme-toggle">
+                        <input type="checkbox" id="themeToggle">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
             </div>
-
-    <!-- Notifications -->
-<div class="settings-section">
-    <h3 class="settings-section-title">Notifications</h3>
-
-    <div class="setting-item" id="pushSettingItem" aria-live="polite">
-        <div class="setting-info">
-            <div class="setting-label">Push Notifications</div>
-            <div class="setting-description" id="pushPermissionDescription">Receive push notifications on this device</div>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end;">
-            <label class="theme-toggle" title="Enable push notifications">
-                <input type="checkbox" id="enablePushToggle" aria-label="Enable push notifications">
-                <span class="toggle-slider"></span>
-            </label>
-            <button id="requestPermissionBtn" class="btn-ghost" style="margin-top:8px; font-size:0.85rem; display:none;">Request permission</button>
-            <button id="showIOSInstructionsBtn" class="btn-ghost" style="margin-top:8px; font-size:0.85rem; display:none;">Show iOS instructions</button>
-        </div>
-    </div>
-
-    <div class="setting-item">
-        <div class="setting-info">
-            <div class="setting-label">Play Sound</div>
-            <div class="setting-description">Play a short sound for new messages</div>
-        </div>
-        <label class="theme-toggle" title="Enable message sound">
-            <input type="checkbox" id="enableSoundToggle" aria-label="Enable message sound">
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
-</div>
 
             <div class="settings-section">
                 <h3 class="settings-section-title">Profile</h3>
@@ -1620,62 +1740,22 @@
         </div>
     </div>
 
-    <!-- iOS instruction modal (Option B) -->
-    <div id="iosInstructionModal" class="ios-modal" role="dialog" aria-modal="true" aria-labelledby="iosInstructionTitle" aria-describedby="iosInstructionDesc">
-        <h3 id="iosInstructionTitle">Enable notifications on iOS</h3>
-        <p id="iosInstructionDesc">iOS requires a couple of manual steps (especially when using Safari / home screen). Follow the short steps below.</p>
-
-        <div class="ios-step">
-            <div class="step-num">1</div>
-            <div>
-                <strong>Open this site in Safari</strong>
-                <div class="small-note">If you're in another browser (Chrome/WebView), copy the URL and open it in Safari.</div>
-            </div>
-        </div>
-
-        <div class="ios-step">
-            <div class="step-num">2</div>
-            <div>
-                <strong>Add to Home Screen</strong>
-                <div class="small-note">Use <em>Share → Add to Home Screen</em> in Safari. This enables service worker features for web apps.</div>
-            </div>
-        </div>
-
-        <div class="ios-step">
-            <div class="step-num">3</div>
-            <div>
-                <strong>Open from Home Screen & allow notifications</strong>
-                <div class="small-note">When app prompts, choose <strong>Allow</strong>. If denied earlier, see steps in Settings → Safari → Notifications permission.</div>
-            </div>
-        </div>
-
-        <label style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-            <input type="checkbox" id="iosDontShowAgain">
-            <span class="small-note">Don't show this again</span>
-        </label>
-
-        <div class="modal-actions" style="margin-top:12px;">
-            <button id="iosCloseBtn" class="btn-ghost">Close</button>
-            <button id="iosOpenSafariBtn" class="btn-primary">Open Safari</button>
-        </div>
-    </div>
-
     <!-- Main App -->
-    <div id="mainApp" class="app d-none" aria-hidden="true">
+    <div id="mainApp" class="app d-none">
         <div class="app-header">
             <div class="app-title">sTalk</div>
             <div class="header-actions">
-                <button class="settings-btn" id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
+                <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
                 <div class="user-menu">
-                    <div class="user-avatar" id="userAvatar" aria-haspopup="true" aria-expanded="false">A</div>
-                    <div class="user-dropdown" id="userDropdown" role="menu" aria-hidden="true">
+                    <div class="user-avatar" id="userAvatar">A</div>
+                    <div class="user-dropdown" id="userDropdown">
                         <div class="dropdown-header">
                             <div class="dropdown-name" id="userName">User</div>
                             <div class="dropdown-username" id="userUsername">@user</div>
                         </div>
-                        <ul class="dropdown-menu" role="menu">
-                            <li class="dropdown-item" id="quickSettingsItem" role="menuitem">⚙️ Settings</li>
-                            <li class="dropdown-item" id="quickLogoutItem" role="menuitem">🚪 Sign Out</li>
+                        <ul class="dropdown-menu">
+                            <li class="dropdown-item" id="quickSettingsItem">⚙️ Settings</li>
+                            <li class="dropdown-item" id="quickLogoutItem">🚪 Sign Out</li>
                         </ul>
                     </div>
                 </div>
@@ -1690,10 +1770,9 @@
                         class="search-input" 
                         id="userSearch" 
                         placeholder="Search users..."
-                        aria-label="Search users"
                     >
                 </div>
-                <div class="user-list" id="userList" role="list">
+                <div class="user-list" id="userList">
                     <div class="loading" id="userListLoading">
                         <div class="spinner"></div>
                     </div>
@@ -1702,16 +1781,14 @@
 
             <div class="chat-detail-container" id="chatDetailContainer">
                 <div class="chat-header" id="chatHeader" style="display: none;">
-                    <button class="back-btn" id="backBtn" aria-label="Back">←</button>
-                    <!-- header avatar slot inserted so profile picture shows between back and name -->
-                    <div class="chat-header-avatar" id="chatHeaderAvatar">A</div>
+                    <button class="back-btn" id="backBtn">←</button>
                     <div class="chat-header-info">
                         <div class="chat-header-name" id="chatHeaderName">Select a user</div>
                         <div class="chat-header-status" id="chatHeaderStatus">to start messaging</div>
                     </div>
                 </div>
 
-                <div class="messages-container" id="messagesContainer" role="log" aria-live="polite" aria-atomic="false">
+                <div class="messages-container" id="messagesContainer">
                     <div class="empty-state">
                         <div class="empty-state-icon">💬</div>
                         <div class="empty-state-title">Welcome to sTalk</div>
@@ -1725,13 +1802,12 @@
                         id="messageInput" 
                         placeholder="Type a message..."
                         rows="1"
-                        aria-label="Compose message"
                     ></textarea>
                     <div class="input-actions">
-                        <button class="attach-btn" id="attachBtn" title="Attach files" aria-label="Attach files">
+                        <button class="attach-btn" id="attachBtn" title="Attach files">
                             📎
                         </button>
-                        <button class="send-btn" id="sendBtn" disabled aria-label="Send message">
+                        <button class="send-btn" id="sendBtn" disabled>
                             ➤
                         </button>
                     </div>
@@ -1741,7 +1817,6 @@
                         class="file-input" 
                         multiple 
                         accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar"
-                        aria-hidden="true"
                     >
                 </div>
             </div>
@@ -1753,132 +1828,5 @@
     <script src="app.js"></script>
     <!-- Push Notification Client -->
     <script src="/push-client.js"></script>
-
-    <!-- Helper script: keeps header sticky, adjusts messages area when keyboard appears, and exposes small API -->
-    <script>
-    (function () {
-      'use strict';
-
-      const messagesContainer = document.getElementById('messagesContainer');
-      const chatHeader = document.getElementById('chatHeader');
-      const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
-      const chatHeaderName = document.getElementById('chatHeaderName');
-      const chatHeaderStatus = document.getElementById('chatHeaderStatus');
-      const messageInputContainer = document.getElementById('messageInputContainer');
-      const messageInput = document.getElementById('messageInput');
-
-      // Set avatar helper: accepts URL (starts with http or /), emoji, or text initial
-      window.setChatHeaderAvatar = function (value) {
-        if (!chatHeaderAvatar) return;
-        try {
-          if (!value) {
-            chatHeaderAvatar.style.backgroundImage = '';
-            chatHeaderAvatar.textContent = '';
-            return;
-          }
-          if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/'))) {
-            chatHeaderAvatar.style.backgroundImage = 'url("' + value + '")';
-            chatHeaderAvatar.textContent = '';
-          } else {
-            chatHeaderAvatar.style.backgroundImage = '';
-            chatHeaderAvatar.textContent = value;
-          }
-        } catch (e) { /* ignore */ }
-      };
-
-      // Listen for custom event 'chat:selected' (app.js can dispatch this)
-      window.addEventListener('chat:selected', (ev) => {
-        const d = ev && ev.detail;
-        if (!d) return;
-        if (d.name) chatHeaderName.textContent = d.name;
-        if (d.status) chatHeaderStatus.textContent = d.status;
-        if (typeof d.avatar !== 'undefined') setChatHeaderAvatar(d.avatar);
-        if (chatHeader) chatHeader.style.display = 'flex';
-        setTimeout(() => {
-          try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
-        }, 50);
-      });
-
-      // Small API for programmatic updates
-      window.updateChatHeader = function ({ name, status, avatar }) {
-        if (name) chatHeaderName.textContent = name;
-        if (status) chatHeaderStatus.textContent = status;
-        if (typeof avatar !== 'undefined') setChatHeaderAvatar(avatar);
-        if (chatHeader) chatHeader.style.display = 'flex';
-      };
-
-      // Recalculate messages container height using visualViewport when keyboard opens (mobile)
-      function adjustForViewport() {
-        try {
-          const headerHeight = (chatHeader && chatHeader.getBoundingClientRect) ? chatHeader.getBoundingClientRect().height : 0;
-          const inputHeight = (messageInputContainer && messageInputContainer.getBoundingClientRect) ? messageInputContainer.getBoundingClientRect().height : 0;
-
-          const viewportHeight = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-          // leave a small gap
-          const available = Math.max(120, Math.floor(viewportHeight - headerHeight - inputHeight - 8));
-          if (messagesContainer) {
-            messagesContainer.style.height = available + 'px';
-            messagesContainer.style.maxHeight = available + 'px';
-          }
-        } catch (e) {
-          // ignore errors
-        }
-      }
-
-      function debounce(fn, ms) {
-        let t;
-        return function () {
-          clearTimeout(t);
-          t = setTimeout(() => fn(), ms || 50);
-        };
-      }
-
-      const debouncedAdjust = debounce(adjustForViewport, 60);
-
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', debouncedAdjust);
-        window.visualViewport.addEventListener('scroll', debouncedAdjust);
-      } else {
-        window.addEventListener('resize', debouncedAdjust);
-      }
-
-      if (messageInput) {
-        messageInput.addEventListener('focus', () => setTimeout(debouncedAdjust, 60));
-        messageInput.addEventListener('blur', () => setTimeout(debouncedAdjust, 60));
-        messageInput.addEventListener('input', debouncedAdjust);
-      }
-
-      window.addEventListener('orientationchange', debouncedAdjust);
-      document.addEventListener('visibilitychange', debouncedAdjust);
-
-      // On load, set sizes
-      window.addEventListener('load', () => setTimeout(adjustForViewport, 150));
-
-      // Keep header visible when keyboard opens (some iOS cases)
-      function ensureHeaderVisible() {
-        if (!chatHeader) return;
-        try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
-      }
-      if (messageInput) {
-        messageInput.addEventListener('focus', ensureHeaderVisible);
-      }
-
-      // Scroll to bottom helper while preserving header visibility
-      window.appScrollToBottom = function (keepHeader) {
-        if (!messagesContainer) return;
-        if (keepHeader && chatHeader) {
-          try { chatHeader.scrollIntoView({ block: 'start', behavior: 'instant' }); } catch (e) {}
-        }
-        setTimeout(() => {
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }, 40);
-      };
-
-      // Initial adjust
-      setTimeout(adjustForViewport, 200);
-
-    })();
-    </script>
-
 </body>
 </html>
