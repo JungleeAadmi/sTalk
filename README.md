@@ -76,6 +76,8 @@ curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh 
 ```bash
 wget -qO- https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh | sudo bash
 ```
+Pleaee note that there is no app on iOS or Android for it, user can use "add to homescreen" feature of the broswer and ENABLE NOTIFICATION to get notified when a message is received. 
+
 ### Update / Upgrade sTalk
 
 This command updates the application code while preserving the database and uploads. It creates backups under `/root` before updating.
