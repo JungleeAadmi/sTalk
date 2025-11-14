@@ -1,5 +1,6 @@
 // public/push-client.js
 // Push client for sTalk - registers service worker, subscribes and posts subscription to server
+// Enhanced with iOS instructions modal, settings wiring, and safer permission flow.
 
 (function () {
   'use strict';
@@ -9,6 +10,14 @@
   const UNSUBSCRIBE_ENDPOINT = '/api/push/unsubscribe';
   const SW_PATH = '/sw.js';
   const REQ_SCOPE = '/';
+
+  const IOS_MODAL_KEY = 'sTalk_ios_instructions_dont_show';
+  const IOS_MODAL_ID = 'iosInstructionModal';
+  const IOS_DONT_SHOW_ID = 'iosDontShowAgain';
+  const REQUEST_BTN_ID = 'requestPermissionBtn';
+  const SHOW_IOS_BTN_ID = 'showIOSInstructionsBtn';
+  const ENABLE_PUSH_TOGGLE_ID = 'enablePushToggle';
+  const PUSH_DESC_ID = 'pushPermissionDescription';
 
   function urlBase64ToUint8Array(base64String) {
     // Standard helper for VAPID key conversion
@@ -22,176 +31,52 @@
     return outputArray;
   }
 
-  // --- Small DOM helper for the notification banner & modal ---
-  const ui = {
-    idBanner: 'stalk-push-banner',
-    idModal: 'stalk-push-modal',
-    createStyles() {
-      if (document.getElementById('stalk-push-client-styles')) return;
-      const css = `
-#${this.idBanner} {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 18px;
-  z-index: 99999;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: rgba(22,22,22,0.95);
-  color: #fff;
-  padding: 10px 12px;
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  font-size: 14px;
-}
-#${this.idBanner} .stalk-msg { flex: 1; margin-right: 8px; }
-#${this.idBanner} .stalk-actions { display:flex; gap:8px; align-items:center; }
-#${this.idBanner} .stalk-btn {
-  background: linear-gradient(180deg, #1f7ae0, #1665d6);
-  border: none;
-  color: #fff;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-}
-#${this.idBanner} .stalk-btn.tertiary {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 8px 10px;
-}
-#${this.idModal} {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 80px;
-  z-index: 99999;
-  background: rgba(250,250,250,0.98);
-  color: #111;
-  padding: 12px;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  font-size: 14px;
-}
-#${this.idModal} .stalk-modal-title { font-weight: 700; margin-bottom: 8px; }
-#${this.idModal} .stalk-modal-close { float: right; cursor: pointer; color: #444; }
-`;
-      const s = document.createElement('style');
-      s.id = 'stalk-push-client-styles';
-      s.appendChild(document.createTextNode(css));
-      document.head.appendChild(s);
-    },
+  function isIOS() {
+    return /iP(hone|od|ad)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
 
-    showBanner({ mode = 'default' } = {}) {
-      // mode: 'default' | 'denied'
-      try {
-        this.createStyles();
-        if (document.getElementById(this.idBanner)) return;
-        const banner = document.createElement('div');
-        banner.id = this.idBanner;
+  function isInStandaloneMode() {
+    return ('standalone' in navigator && navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+  }
 
-        const msg = document.createElement('div');
-        msg.className = 'stalk-msg';
+  function showIOSModal() {
+    const modal = document.getElementById(IOS_MODAL_ID);
+    if (!modal) return;
+    const dontShow = document.getElementById(IOS_DONT_SHOW_ID);
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
 
-        const actions = document.createElement('div');
-        actions.className = 'stalk-actions';
+    const closeBtn = document.getElementById('iosCloseBtn');
+    const openSafariBtn = document.getElementById('iosOpenSafariBtn');
 
-        if (mode === 'default') {
-          msg.innerText = 'Enable push notifications for message alerts.';
-          const btnEnable = document.createElement('button');
-          btnEnable.className = 'stalk-btn';
-          btnEnable.innerText = 'Enable Notifications';
-          btnEnable.addEventListener('click', (e) => {
-            // User gesture -> trigger permission flow passed to caller
-            document.body.removeChild(banner);
-            if (typeof window.pushClient !== 'undefined') {
-              // call subscribe with force=false; requestPermission will run inside subscribe flow
-              window.pushClient.subscribe().catch(()=>{});
-            }
-          });
-          const btnLater = document.createElement('button');
-          btnLater.className = 'stalk-btn tertiary';
-          btnLater.innerText = 'Later';
-          btnLater.addEventListener('click', () => {
-            if (document.getElementById(this.idBanner)) {
-              document.body.removeChild(banner);
-            }
-          });
-          actions.appendChild(btnLater);
-          actions.appendChild(btnEnable);
-        } else if (mode === 'denied') {
-          msg.innerText = 'Notifications are blocked for this site — open Settings to allow.';
-          const btnHelp = document.createElement('button');
-          btnHelp.className = 'stalk-btn';
-          btnHelp.innerText = 'How to enable';
-          btnHelp.addEventListener('click', () => {
-            this.showModal();
-            if (document.getElementById(this.idBanner)) document.body.removeChild(banner);
-          });
-          const btnDismiss = document.createElement('button');
-          btnDismiss.className = 'stalk-btn tertiary';
-          btnDismiss.innerText = 'Dismiss';
-          btnDismiss.addEventListener('click', () => {
-            if (document.getElementById(this.idBanner)) document.body.removeChild(banner);
-          });
-          actions.appendChild(btnDismiss);
-          actions.appendChild(btnHelp);
-        }
-
-        banner.appendChild(msg);
-        banner.appendChild(actions);
-        document.body.appendChild(banner);
-      } catch (e) {
-        // ignore UI errors
-        console.warn('push-client UI banner error', e);
+    function closeModal() {
+      if (dontShow && dontShow.checked) {
+        localStorage.setItem(IOS_MODAL_KEY, '1');
       }
-    },
-
-    hideBanner() {
-      const el = document.getElementById(this.idBanner);
-      if (el) el.remove();
-    },
-
-    showModal() {
-      try {
-        if (document.getElementById(this.idModal)) return;
-        const modal = document.createElement('div');
-        modal.id = this.idModal;
-
-        const close = document.createElement('span');
-        close.className = 'stalk-modal-close';
-        close.innerText = '✕';
-        close.addEventListener('click', () => modal.remove());
-
-        const title = document.createElement('div');
-        title.className = 'stalk-modal-title';
-        title.innerText = 'Enable Notifications (iOS / Safari)';
-
-        const content = document.createElement('div');
-        content.innerHTML = `
-          <p>If you previously denied notifications, Safari will not show the prompt again. To re-enable:</p>
-          <ol>
-            <li>Open <strong>Settings</strong> &rarr; <strong>Safari</strong> &rarr; <strong>Notifications</strong> and ensure notifications are allowed for the site — <em>or</em></li>
-            <li>Open the <strong>Settings</strong> app, choose <strong>Safari</strong>, then Website Settings &rarr; Notifications &rarr; find this site and enable notifications.</li>
-            <li>Alternatively delete the saved PWA from Home Screen and re-add it, then open the site and tap <strong>Enable Notifications</strong> when asked.</li>
-          </ol>
-          <p>Note: iOS requires that the permission prompt is triggered from a user gesture (a button tap). Use the "Enable Notifications" button in the app when you see it.</p>
-        `;
-        modal.appendChild(close);
-        modal.appendChild(title);
-        modal.appendChild(content);
-
-        document.body.appendChild(modal);
-      } catch (e) {
-        console.warn('push-client UI modal error', e);
-      }
+      modal.classList.remove('show');
+      modal.setAttribute('aria-hidden', 'true');
+      closeBtn && closeBtn.removeEventListener('click', closeModal);
+      openSafariBtn && openSafariBtn.removeEventListener('click', openSafari);
     }
-  };
+
+    function openSafari() {
+      // Suggest opening Safari -- try to open the site's URL in a new tab
+      try {
+        window.open(window.location.href, '_blank');
+      } catch (e) {}
+      closeModal();
+    }
+
+    closeBtn && closeBtn.addEventListener('click', closeModal);
+    openSafariBtn && openSafariBtn.addEventListener('click', openSafari);
+  }
+
+  function shouldShowIOSInstructions() {
+    if (!isIOS()) return false;
+    if (localStorage.getItem(IOS_MODAL_KEY) === '1') return false;
+    // If not in standalone and permission is default (user hasn't allowed) show.
+    return Notification.permission !== 'granted';
+  }
 
   const pushClient = {
     registration: null,
@@ -199,14 +84,17 @@
     subscription: null,
 
     async init() {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      // Setup UI controls wiring
+      this.setupUI();
+
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.info('Push not supported in this browser');
+        this.updatePermissionUI();
         return;
       }
 
       try {
         // Register SW (if not already)
-        // sw scope & path are configurable at top
         this.registration = await navigator.serviceWorker.register(SW_PATH, { scope: REQ_SCOPE });
         console.info('Service Worker registered', this.registration.scope);
 
@@ -215,7 +103,7 @@
           try {
             const { type, data } = ev.data || {};
             if (type === 'notification-click' && window.app) {
-              window.app.showToast && window.app.showToast('🔔 Notification clicked', 'info');
+              window.app.showToast('🔔 Notification clicked', 'info');
               if (data && data.url) {
                 window.app && window.app.handleNotificationClick && window.app.handleNotificationClick(data);
               }
@@ -224,7 +112,7 @@
               console.info('Push subscription changed - re-subscribing');
               this.subscribe(true);
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) {}
         });
 
         // Get VAPID public key from server
@@ -244,37 +132,142 @@
         this.subscription = await this.registration.pushManager.getSubscription();
         if (this.subscription) {
           console.info('Existing push subscription found');
+          // Try to ensure server has it (optional)
           await this.postSubscription(this.subscription);
-          ui.hideBanner();
-          return;
         }
 
-        // If no subscription, show banner depending on permission state
-        // Do not auto-call requestPermission here; must be user gesture on some browsers (esp iOS)
-        if (Notification.permission === 'granted') {
-          // attempt to subscribe automatically if token exists
-          try { await this.subscribe(); } catch (e) { /* ignore */ }
-        } else if (Notification.permission === 'default') {
-          // show "Enable Notifications" banner — user gesture will call subscribe
-          ui.showBanner({ mode: 'default' });
-        } else if (Notification.permission === 'denied') {
-          // show "How to enable" instructions
-          ui.showBanner({ mode: 'denied' });
+        // update UI permission states
+        this.updatePermissionUI();
+
+        // Show iOS modal if appropriate and not shown
+        if (shouldShowIOSInstructions()) {
+          // If the UA is iOS and notifications not granted, show the instructions in Settings.
+          // But do not automatically interrupt — show a small CTA in Settings
+          const showBtn = document.getElementById(SHOW_IOS_BTN_ID);
+          if (showBtn) showBtn.style.display = 'inline-block';
+          // If user is in standalone or explicitly allowed, we might try subscription.
+          if (Notification.permission === 'granted') {
+            // ensure subscription present
+            if (!this.subscription && this.applicationServerKey) {
+              await this.subscribe();
+            }
+          }
         }
 
       } catch (err) {
         console.error('Push init error', err);
+        this.updatePermissionUI();
+      }
+    },
+
+    setupUI() {
+      // Hook up Settings toggles and buttons if present
+      try {
+        const enablePushToggle = document.getElementById(ENABLE_PUSH_TOGGLE_ID);
+        const requestBtn = document.getElementById(REQUEST_BTN_ID);
+        const showIOSBtn = document.getElementById(SHOW_IOS_BTN_ID);
+        const pushDesc = document.getElementById(PUSH_DESC_ID);
+
+        // Update UI text depending on permission
+        this.updatePermissionUI();
+
+        if (enablePushToggle) {
+          // initialize checkbox based on current subscription / permission
+          enablePushToggle.checked = (Notification && Notification.permission === 'granted' && !!this.subscription);
+          enablePushToggle.addEventListener('change', async (ev) => {
+            if (enablePushToggle.checked) {
+              // request permission and subscribe
+              const ok = await this.requestPermission();
+              if (!ok) {
+                enablePushToggle.checked = false;
+                this.updatePermissionUI();
+                return;
+              }
+              await this.init(); // ensure registration exists and key fetched
+              await this.subscribe(true);
+            } else {
+              await this.unsubscribe();
+            }
+            this.updatePermissionUI();
+          });
+        }
+
+        if (requestBtn) {
+          requestBtn.style.display = 'none';
+          requestBtn.addEventListener('click', async () => {
+            const ok = await this.requestPermission();
+            this.updatePermissionUI();
+            if (ok) {
+              // subscribe if logged in
+              if (localStorage.getItem('sTalk_token')) {
+                await this.init();
+                await this.subscribe(true);
+              }
+            }
+          });
+        }
+
+        if (showIOSBtn) {
+          showIOSBtn.style.display = 'none';
+          showIOSBtn.addEventListener('click', () => {
+            showIOSModal();
+          });
+        }
+      } catch (e) {
+        console.warn('setupUI error', e);
+      }
+    },
+
+    updatePermissionUI() {
+      try {
+        const pushDesc = document.getElementById(PUSH_DESC_ID);
+        const requestBtn = document.getElementById(REQUEST_BTN_ID);
+        const showIOSBtn = document.getElementById(SHOW_IOS_BTN_ID);
+        const enablePushToggle = document.getElementById(ENABLE_PUSH_TOGGLE_ID);
+
+        const state = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+        if (pushDesc) {
+          if (state === 'granted') {
+            pushDesc.textContent = 'Permission granted — push enabled';
+            if (requestBtn) requestBtn.style.display = 'none';
+            if (showIOSBtn) showIOSBtn.style.display = 'none';
+            if (enablePushToggle) enablePushToggle.checked = !!this.subscription;
+          } else if (state === 'denied') {
+            pushDesc.textContent = 'Notifications blocked — open Settings to re-enable';
+            if (requestBtn) requestBtn.style.display = 'none';
+            // suggest iOS instructions if on ios
+            if (showIOSBtn) {
+              showIOSBtn.style.display = isIOS() ? 'inline-block' : 'none';
+            }
+            if (enablePushToggle) enablePushToggle.checked = false;
+          } else if (state === 'default') {
+            pushDesc.textContent = 'Permission not requested yet';
+            if (requestBtn) requestBtn.style.display = 'inline-block';
+            if (showIOSBtn) showIOSBtn.style.display = isIOS() ? 'inline-block' : 'none';
+            if (enablePushToggle) enablePushToggle.checked = false;
+          } else {
+            pushDesc.textContent = 'Notifications not supported in this browser';
+            if (requestBtn) requestBtn.style.display = 'none';
+            if (showIOSBtn) showIOSBtn.style.display = 'none';
+            if (enablePushToggle) enablePushToggle.disabled = true;
+          }
+        }
+      } catch (e) {
+        console.warn('updatePermissionUI error', e);
       }
     },
 
     async requestPermission() {
       if (!('Notification' in window)) return false;
       if (Notification.permission === 'granted') return true;
+
+      // On iOS, the native permission prompt can be confusing; prefer user-initiated flow
       try {
-        // This must be called inside a user gesture to work on iOS/Safari
         const permission = await Notification.requestPermission();
+        this.updatePermissionUI();
         return permission === 'granted';
       } catch (e) {
+        this.updatePermissionUI();
         return false;
       }
     },
@@ -289,20 +282,12 @@
         return;
       }
 
-      // If the browser disallows notifications entirely, bail out
-      if (!('Notification' in window)) {
-        console.warn('Notifications not supported');
-        return;
-      }
-
-      // If permission not granted, request permission (must happen from user gesture ideally)
+      // If permission is denied, don't try
       if (!force && Notification.permission !== 'granted') {
-        // requestPermission should be called inside a user gesture to succeed on iOS Safari
         const ok = await this.requestPermission();
         if (!ok) {
-          console.warn('Notification permission denied or not granted');
-          // show denied instructions if explicitly denied
-          if (Notification.permission === 'denied') ui.showBanner({ mode: 'denied' });
+          console.warn('Notification permission denied');
+          this.updatePermissionUI();
           return;
         }
       }
@@ -312,7 +297,7 @@
         if (existing && !force) {
           this.subscription = existing;
           await this.postSubscription(existing);
-          ui.hideBanner();
+          this.updatePermissionUI();
           return existing;
         }
 
@@ -324,31 +309,34 @@
         this.subscription = sub;
         console.info('Push subscribed', sub);
         await this.postSubscription(sub);
-        ui.hideBanner();
-        // let the app show a success toast if available
-        window.app && window.app.showToast && window.app.showToast('🔔 Notifications enabled', 'success');
+        this.updatePermissionUI();
         return sub;
       } catch (err) {
         console.error('Failed to subscribe to push', err);
         if (window.app && window.app.showToast) window.app.showToast('🔕 Push subscription failed', 'error');
-        // If subscription attempt failed and permission is still default, show banner again
-        if (Notification.permission === 'default') ui.showBanner({ mode: 'default' });
+        this.updatePermissionUI();
       }
     },
 
     async unsubscribe() {
       try {
         const sub = await (this.registration ? this.registration.pushManager.getSubscription() : null);
-        if (!sub) return true;
+        if (!sub) {
+          this.subscription = null;
+          this.updatePermissionUI();
+          return true;
+        }
         await this.postUnsubscribe(sub);
         const ok = await sub.unsubscribe();
         if (ok) {
           this.subscription = null;
           console.info('Unsubscribed from push');
         }
+        this.updatePermissionUI();
         return ok;
       } catch (err) {
         console.error('Unsubscribe error', err);
+        this.updatePermissionUI();
         return false;
       }
     },
@@ -361,7 +349,6 @@
           return;
         }
 
-        // server expects subscription JSON; pass as-is
         const response = await fetch(SUBSCRIBE_ENDPOINT, {
           method: 'POST',
           headers: {
@@ -373,6 +360,10 @@
 
         if (!response.ok) {
           console.warn('Server did not accept subscription');
+          // if server returns 403 or other, we surface it
+          if (response.status === 403 || response.status === 400) {
+            console.warn('Server rejected push subscription; check server VAPID keys or push endpoint.');
+          }
         } else {
           console.info('Subscription posted to server');
         }
@@ -405,15 +396,29 @@
 
   // Auto-init if app already logged in
   document.addEventListener('DOMContentLoaded', () => {
-    // Don't auto-run subscribe unless user is logged in
     (async () => {
       try {
-        // init SW and get key
+        // init SW and get key (will also setup UI wiring)
         await pushClient.init();
-        // if user token present, attempt subscribe automatically (only if permission granted)
-        if (localStorage.getItem('sTalk_token') && Notification.permission === 'granted') {
+
+        // if user token present, attempt subscribe automatically but only if permission already granted
+        if (localStorage.getItem('sTalk_token')) {
           // give app a small delay to finish validateToken
-          setTimeout(() => { pushClient.subscribe().catch(()=>{}); }, 1200);
+          setTimeout(async () => {
+            if (Notification.permission === 'granted') {
+              await pushClient.subscribe().catch(()=>{});
+            } else {
+              // If default and on iOS, show a CTA in settings instead of auto-requesting
+              if (isIOS() && shouldShowIOSInstructions()) {
+                const showBtn = document.getElementById(SHOW_IOS_BTN_ID);
+                if (showBtn) showBtn.style.display = 'inline-block';
+                // Optionally show modal immediately if user not in browser: don't auto show to avoid surprise
+              } else {
+                // For non-iOS or where permissions can be requested, we can try to request once
+                // but prefer user action. So only request if push toggle is checked (handled by UI)
+              }
+            }
+          }, 1200);
         }
       } catch (e) {
         console.warn('pushClient auto-init failed', e);
