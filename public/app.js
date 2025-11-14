@@ -71,7 +71,7 @@ class STalk {
         // Push toggle (settings UI element with id enablePushToggle is optional)
         const pushToggle = document.getElementById('enablePushToggle');
         if (pushToggle) {
-            // initialize UI state
+            // initialize UI state (may be overwritten by initPush later)
             pushToggle.checked = !!this.pushEnabled;
             pushToggle.addEventListener('change', async (e) => {
                 try {
@@ -80,8 +80,11 @@ class STalk {
                     } else {
                         await this.disablePush();
                     }
+                    // refresh UI after attempt
+                    await this.refreshPushToggleState();
                 } catch (err) {
                     console.error('Push toggle error', err);
+                    // revert UI change on error
                     e.target.checked = !e.target.checked;
                 }
             });
@@ -238,7 +241,10 @@ class STalk {
 
         // ensure push/sound toggles reflect current state (if present)
         const pushToggle = document.getElementById('enablePushToggle');
-        if (pushToggle) pushToggle.checked = !!this.pushEnabled;
+        if (pushToggle) {
+            // refresh actual state (permission + subscription)
+            this.refreshPushToggleState().catch(()=>{});
+        }
         const soundToggle = document.getElementById('enableSoundToggle');
         if (soundToggle) soundToggle.checked = !!this.soundEnabled;
 
@@ -659,12 +665,16 @@ class STalk {
         }
     }
 
+    // Avatar selection: safe implementation that doesn't rely on a passed event
     selectAvatar(type, value) {
+        // mark matching option as selected (based on displayed value)
         document.querySelectorAll('.avatar-option').forEach(option => {
             option.classList.remove('selected');
+            if ((option.textContent || '').trim() === (value || '').trim()) {
+                option.classList.add('selected');
+            }
         });
 
-        event.target.classList.add('selected');
         this.updateAvatar(type, value);
     }
 
@@ -1198,23 +1208,43 @@ class STalk {
         // if service worker / Push API not supported - reflect in UI and return
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
             console.debug('Push not supported in this browser');
+            // ensure UI toggle exists and displays false
+            const pushToggle = document.getElementById('enablePushToggle');
+            if (pushToggle) pushToggle.checked = false;
             return;
         }
 
-        // If push was previously enabled by user, attempt to re-subscribe automatically
-        if (this.pushEnabled) {
-            try {
+        // Ensure pushClient is initialized if present
+        try {
+            if (window.pushClient) {
+                await window.pushClient.init();
+            } else {
+                // Make sure SW is registered even if pushClient isn't included
                 await this.ensureServiceWorkerRegistered();
-                // If push-client helper exists (included as push-client.js), use it
-                if (window.pushClient && this.token) {
-                    // get public key from server
-                    const resp = await fetch(`${this.API_BASE}/push/key`);
-                    if (resp.ok) {
-                        const { publicKey } = await resp.json();
-                        if (publicKey) {
-                            await window.pushClient.subscribeForPush(publicKey, this.token);
-                            console.log('Push re-subscription succeeded');
+            }
+        } catch (e) {
+            console.warn('Push client init error', e);
+        }
+
+        // If push was previously enabled by user, attempt to re-subscribe automatically
+        if (this.pushEnabled && this.token) {
+            try {
+                // Try using pushClient API when available
+                if (window.pushClient) {
+                    // pushClient.init() already called above; now ensure subscription exists on server
+                    const existing = await (window.pushClient.registration ? window.pushClient.registration.pushManager.getSubscription() : null);
+                    // pushClient may not expose registration; fallback to navigator serviceWorker
+                    if (!existing) {
+                        const reg = await navigator.serviceWorker.getRegistration();
+                        if (reg) {
+                            const sub = await reg.pushManager.getSubscription();
+                            if (sub && this.token) {
+                                await window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : null;
+                            }
                         }
+                    } else {
+                        // ensure server has it (push-client's postSubscription may run inside subscribe)
+                        await window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : null;
                     }
                 } else {
                     // attempt to get existing subscription and send to server manually
@@ -1239,9 +1269,8 @@ class STalk {
             }
         }
 
-        // ensure UI toggle exists and displays correct state
-        const pushToggle = document.getElementById('enablePushToggle');
-        if (pushToggle) pushToggle.checked = !!this.pushEnabled;
+        // ensure UI toggle exists and displays correct state (reflect actual subscription)
+        await this.refreshPushToggleState().catch(()=>{});
     }
 
     // Ensure service worker is registered (used by push-client)
@@ -1259,9 +1288,57 @@ class STalk {
         }
     }
 
+    // Refresh push toggle UI to represent actual permission / subscription state
+    async refreshPushToggleState() {
+        const pushToggle = document.getElementById('enablePushToggle');
+        if (!pushToggle) return;
+
+        // Default unchecked
+        pushToggle.checked = false;
+
+        // If notifications unsupported, disable toggle
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+            pushToggle.checked = false;
+            pushToggle.disabled = true;
+            return;
+        }
+
+        // If permission is denied, reflect that (unchecked)
+        if (Notification.permission === 'denied') {
+            pushToggle.checked = false;
+            pushToggle.disabled = false;
+            return;
+        }
+
+        // Check subscription existence
+        try {
+            // prefer pushClient registration if exposed
+            let sub = null;
+            if (window.pushClient && window.pushClient.registration) {
+                sub = await window.pushClient.registration.pushManager.getSubscription();
+            } else {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) sub = await reg.pushManager.getSubscription();
+            }
+
+            if (sub) {
+                pushToggle.checked = true;
+                this.pushEnabled = true;
+                localStorage.setItem('sTalk_push_enabled', 'true');
+            } else {
+                pushToggle.checked = false;
+                this.pushEnabled = false;
+                localStorage.setItem('sTalk_push_enabled', 'false');
+            }
+        } catch (e) {
+            console.warn('Failed to determine push subscription state', e);
+            pushToggle.checked = !!this.pushEnabled;
+        }
+    }
+
     // Enable push: request permission, register SW, then subscribe and send to server
     async enablePush() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
             alert('Push notifications are not supported by this browser.');
             return;
         }
@@ -1279,17 +1356,22 @@ class STalk {
             // register service worker if needed
             await this.ensureServiceWorkerRegistered();
 
-            // fetch public vapid key from server
-            const resp = await fetch(`${this.API_BASE}/push/key`);
-            if (!resp.ok) throw new Error('Failed to fetch push key from server');
-            const { publicKey } = await resp.json();
-            if (!publicKey) throw new Error('Server did not provide a VAPID public key');
-
-            // use helper if available
-            if (window.pushClient && this.token) {
-                await window.pushClient.subscribeForPush(publicKey, this.token);
+            // If push-client helper exists, prefer it (it handles posting subscription to server)
+            if (window.pushClient) {
+                try {
+                    // ensure pushClient initialized
+                    await window.pushClient.init();
+                } catch(e){/* continue */}
+                const sub = await window.pushClient.subscribe();
+                // pushClient.subscribe() will post subscription to server itself
+                if (!sub) throw new Error('Subscription failed');
             } else {
                 // fallback: use raw PushManager subscribe then send to our subscribe endpoint
+                const resp = await fetch(`${this.API_BASE}/push/key`);
+                if (!resp.ok) throw new Error('Failed to fetch push key from server');
+                const { publicKey } = await resp.json();
+                if (!publicKey) throw new Error('Server did not provide a VAPID public key');
+
                 const reg = await navigator.serviceWorker.getRegistration();
                 if (!reg) throw new Error('Service worker registration missing');
                 const sub = await reg.pushManager.subscribe({
@@ -1311,6 +1393,8 @@ class STalk {
             this.pushEnabled = true;
             localStorage.setItem('sTalk_push_enabled', 'true');
             this.showToast('✅ Push notifications enabled', 'success');
+            // update UI toggle state
+            await this.refreshPushToggleState();
         } catch (err) {
             console.error('Enable push failed', err);
             this.pushEnabled = false;
@@ -1323,31 +1407,36 @@ class STalk {
     // Disable push: attempt to unsubscribe and notify server
     async disablePush() {
         try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (!reg) {
-                this.pushEnabled = false;
-                localStorage.setItem('sTalk_push_enabled', 'false');
-                this.showToast('✅ Push disabled', 'success');
-                return;
-            }
-
-            const sub = await reg.pushManager.getSubscription();
-            if (sub && this.token) {
-                // notify server to remove subscription
-                await fetch('/api/push/unsubscribe', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.token}`
-                    },
-                    body: JSON.stringify({ endpoint: sub.endpoint })
-                });
-                await sub.unsubscribe();
+            // Prefer pushClient when available
+            if (window.pushClient) {
+                try {
+                    await window.pushClient.unsubscribe();
+                } catch (e) {
+                    console.warn('pushClient.unsubscribe failed', e);
+                }
+            } else {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) {
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub && this.token) {
+                        // notify server to remove subscription
+                        await fetch('/api/push/unsubscribe', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.token}`
+                            },
+                            body: JSON.stringify({ endpoint: sub.endpoint })
+                        });
+                        await sub.unsubscribe();
+                    }
+                }
             }
 
             this.pushEnabled = false;
             localStorage.setItem('sTalk_push_enabled', 'false');
             this.showToast('✅ Push disabled', 'success');
+            await this.refreshPushToggleState();
         } catch (err) {
             console.warn('Disable push failed', err);
             this.showToast('❌ Failed to disable push', 'error');
