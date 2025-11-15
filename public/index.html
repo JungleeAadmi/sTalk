@@ -14,6 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <style>
+        /* ---------- (existing styles kept intact) ---------- */
         * {
             margin: 0;
             padding: 0;
@@ -781,22 +782,6 @@
             text-align: left;
         }
 
-        /* FIX: Ensure images sent in chat never exceed bubble width (prevents full-resolution overflowing) */
-        .message-bubble img,
-        .media-preview,
-        .media-message img,
-        .video-thumbnail,
-        .media-fullscreen-image,
-        .media-fullscreen-video {
-            max-width: 100%;
-            width: auto;
-            height: auto;
-            max-height: 320px; /* reasonable cap inside bubble; adjust if you want smaller */
-            border-radius: 12px;
-            object-fit: cover;
-            display: block;
-        }
-
         /* many other styles kept as-is (media messages, file previews, etc.) */
         /* ... (omitted here for brevity in commentary, but in file everything remains intact) */
 
@@ -1438,6 +1423,128 @@
             color: var(--text-secondary);
             margin-top: 0.5rem;
         }
+
+        /* ---------- New / adjusted styles for thumbnails and lightbox ---------- */
+
+        /* Constrain images and video thumbnails inside message bubbles */
+        .media-message,
+        .file-message {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        /* Thumbnails inside bubbles */
+        .media-preview,
+        .video-thumbnail,
+        .media-message img,
+        .media-message video {
+            display: block;
+            max-width: calc(70%);             /* relative to bubble; keeps messages readable */
+            max-height: 45vh;                 /* prevent very tall images from overflowing the viewport */
+            width: auto;
+            height: auto;
+            border-radius: 12px;
+            object-fit: cover;                /* crops slightly to look nice */
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* Slightly smaller thumbnails for sent messages (right side) */
+        .message.sent .media-preview,
+        .message.sent .video-thumbnail {
+            max-width: calc(60%);
+        }
+
+        /* Ensure files (non-media) keep layout */
+        .file-message .file-icon {
+            font-size: 1.6rem;
+            margin-right: 0.5rem;
+        }
+
+        /* Lightbox / fullscreen overlay */
+        .media-fullscreen-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 6000;
+            padding: 20px;
+        }
+
+        .media-fullscreen-content {
+            max-width: 98%;
+            max-height: 98%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .media-fullscreen-image,
+        .media-fullscreen-video {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+        }
+
+        .media-fullscreen-close {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .media-fullscreen-title {
+            color: #fff;
+            font-size: 0.95rem;
+            opacity: 0.95;
+            margin-top: 6px;
+            text-align: center;
+            word-break: break-word;
+            max-width: 90%;
+        }
+
+        /* Make play-button overlay centered on video thumbnail (if used) */
+        .video-preview {
+            position: relative;
+            display: inline-block;
+        }
+        .video-preview .play-button {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 22px;
+            background: rgba(0,0,0,0.45);
+            color: white;
+            padding: 8px 10px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* On very narrow screens, reduce thumbnail size a bit */
+        @media (max-width: 420px) {
+            .media-preview,
+            .video-thumbnail {
+                max-width: 85%;
+                max-height: 38vh;
+            }
+        }
     </style>
     <!-- Favicons & app icons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -1749,6 +1856,7 @@
     <!-- Push Notification Client -->
     <script src="/push-client.js"></script>
 
+    <!-- Small UI helpers already present in your file (keeps header visible, etc.) -->
     <script>
         // small helper to ensure message input is visible when keyboard opens
         (function () {
@@ -1788,6 +1896,112 @@
             closeSettings && closeSettings.addEventListener('click', hideSettings);
             quickSettings && quickSettings.addEventListener('click', () => { hideSettings(); showSettings(); });
         });
+    </script>
+
+    <!-- ---------- New fallback lightbox handler ---------- -->
+    <script>
+    (function () {
+        /**
+         * Delegated click handler for media thumbnails.
+         * Preference order:
+         * 1) If app.openMediaFullscreen / app.playVideo exists, call them (your app.js may handle analytics / tracking etc.)
+         * 2) Fallback to a local overlay implementation that displays image/video full-screen.
+         */
+
+        function createOverlay(contentEl, title) {
+            const overlay = document.createElement('div');
+            overlay.className = 'media-fullscreen-overlay';
+            overlay.innerHTML = ''; // we'll append nodes for better control
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'media-fullscreen-content';
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'media-fullscreen-close';
+            closeBtn.innerHTML = '✕';
+            closeBtn.addEventListener('click', () => overlay.remove());
+
+            wrapper.appendChild(closeBtn);
+            wrapper.appendChild(contentEl);
+
+            if (title) {
+                const t = document.createElement('div');
+                t.className = 'media-fullscreen-title';
+                t.textContent = title;
+                wrapper.appendChild(t);
+            }
+
+            overlay.appendChild(wrapper);
+
+            // close when clicking outside content
+            overlay.addEventListener('click', (ev) => {
+                if (ev.target === overlay) overlay.remove();
+            });
+
+            document.body.appendChild(overlay);
+
+            return overlay;
+        }
+
+        // On click delegation
+        document.addEventListener('click', function (ev) {
+            const img = ev.target.closest('.media-preview');
+            const vid = ev.target.closest('.video-thumbnail, .video-preview, .video-thumbnail source, .video-thumbnail video');
+
+            if (img) {
+                const src = img.getAttribute('src') || img.dataset.src;
+                const title = img.getAttribute('alt') || img.dataset.name || '';
+                if (!src) return;
+                // prefer app handler if exists
+                if (window.app && typeof window.app.openMediaFullscreen === 'function') {
+                    try { window.app.openMediaFullscreen(src, title); return; } catch (e) { /* fallthrough */ }
+                }
+
+                // fallback: create overlay with an <img>
+                const content = document.createElement('img');
+                content.className = 'media-fullscreen-image';
+                content.src = src;
+                content.alt = title || '';
+                createOverlay(content, title);
+                ev.preventDefault();
+                return;
+            }
+
+            if (vid) {
+                // try to discover URL: could be a <video> or a containing .video-preview element
+                let videoEl = ev.target;
+                if (videoEl.tagName === 'SOURCE' || videoEl.tagName === 'IMG') {
+                    // climb to parent .video-preview
+                    videoEl = ev.target.closest('.video-preview') || ev.target.closest('.media-message') || ev.target;
+                }
+                const source = videoEl.querySelector ? (videoEl.querySelector('video source')?.src || videoEl.querySelector('video')?.src) : null;
+                const fallbackSrc = videoEl.getAttribute ? (videoEl.getAttribute('data-src') || videoEl.getAttribute('src')) : null;
+                const src = source || fallbackSrc;
+                const title = (videoEl.getAttribute && (videoEl.getAttribute('data-name') || videoEl.getAttribute('alt'))) || '';
+
+                if (!src) return;
+
+                // prefer app handler if exists
+                if (window.app && typeof window.app.playVideo === 'function') {
+                    try { window.app.playVideo(src); return; } catch (e) { /* fallthrough */ }
+                }
+
+                // fallback: create overlay with <video>
+                const content = document.createElement('video');
+                content.className = 'media-fullscreen-video';
+                content.controls = true;
+                content.autoplay = true;
+
+                const sourceTag = document.createElement('source');
+                sourceTag.src = src;
+                content.appendChild(sourceTag);
+
+                createOverlay(content, title);
+                ev.preventDefault();
+                return;
+            }
+        }, false);
+    })();
     </script>
 
 </body>
