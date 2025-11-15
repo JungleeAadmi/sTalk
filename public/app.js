@@ -2442,43 +2442,62 @@ class STalk {
     }
 
     // attempt to download file; falls back to open-in-new-tab if download rejected (CORS)
-    async attemptDownload(url, originalName = '') {
-        if (!url) return;
-        const filename = this.generateDownloadFilename(originalName || this.extractFileNameFromUrl(url));
-        // Try using anchor download
-        try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.rel = 'noopener noreferrer';
-            a.target = '_blank';
-            // Needed for Firefox in some cases:
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+   // attempt to download/share a file; prefers native share sheet, falls back to anchor download or open-in-new-tab
+async attemptDownload(url, originalName = '') {
+    if (!url) return;
+    const filename = this.generateDownloadFilename(originalName || this.extractFileNameFromUrl(url));
 
-            // Try fetch->blob if same-origin or CORS allows it
-            try {
-                const resp = await fetch(url, { mode: 'cors' });
-                if (!resp.ok) throw new Error('Non-OK response');
-                const blob = await resp.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                const a2 = document.createElement('a');
-                a2.href = objectUrl;
-                a2.download = filename;
-                document.body.appendChild(a2);
-                a2.click();
-                a2.remove();
-                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-            } catch (fetchErr) {
-                // likely CORS or cross-origin restriction; open in new tab for manual save
-                window.open(url, '_blank', 'noopener');
+    // helper to open in new tab fallback
+    const openInNewTab = (u) => {
+        // open without download attribute (last resort)
+        window.open(u, '_blank', 'noopener');
+    };
+
+    try {
+        // Try to fetch the file as a blob first (CORS required)
+        const resp = await fetch(url, { mode: 'cors' });
+        if (!resp.ok) throw new Error('Fetch failed');
+
+        const blob = await resp.blob();
+
+        // If Web Share API with files supported, use it — shows native share sheet including "Save Image".
+        try {
+            const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: filename,
+                    text: ''
+                });
+                return;
             }
-        } catch (err) {
-            // If the a.download approach fails, fallback to open in a new tab
-            window.open(url, '_blank', 'noopener');
+        } catch (shareErr) {
+            // share may throw on some browsers; we'll fall back to anchor download below
+            console.warn('Web Share with files failed:', shareErr);
         }
+
+        // Fallback: create object URL and trigger an anchor download (works in many browsers)
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        a.rel = 'noopener';
+        // do NOT set target='_blank' for the download anchor; clicking should trigger save dialog
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        // revoke object URL after a small delay
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60 * 1000);
+        return;
+    } catch (errFetch) {
+        console.warn('Fetch/download failed or blocked (CORS?)', errFetch);
+        // If fetch failed (often due to CORS), fallback to opening direct URL in new tab/window
+        openInNewTab(url);
     }
+}
+
 
     // helper: generate filename with prefix to avoid duplicates
     generateDownloadFilename(originalName) {
