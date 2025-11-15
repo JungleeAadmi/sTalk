@@ -1850,16 +1850,17 @@
         </div>
     </div>
 
-    <!-- Socket.IO and App Scripts -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
-    <!-- Push Notification Client -->
-    <script src="/push-client.js"></script>
+    <!-- Socket.IO and App Scripts (deferred to ensure DOM is parsed first) -->
+    <script src="/socket.io/socket.io.js" defer></script>
+    <script src="/push-client.js" defer></script>
+    <script src="app.js" defer></script>
+    <!-- Push Notification Client is loaded above (deferred) -->
 
     <!-- Small UI helpers already present in your file (keeps header visible, etc.) -->
     <script>
         // small helper to ensure message input is visible when keyboard opens
         (function () {
+            // this helper is safe to keep — it only references DOM during runtime and does not duplicate handlers
             const msgInput = document.getElementById('messageInput');
             if (!msgInput) return;
             msgInput.addEventListener('focus', () => {
@@ -1875,30 +1876,11 @@
             });
         })();
 
-        // Settings buttons wiring (small helper so push-client can attach after load)
-        document.addEventListener('DOMContentLoaded', () => {
-            // show settings
-            const settingsBtn = document.getElementById('settingsBtn');
-            const settingsModal = document.getElementById('settingsModal');
-            const closeSettings = document.getElementById('closeSettings');
-            const quickSettings = document.getElementById('quickSettingsItem');
-
-            const showSettings = () => {
-                settingsModal.classList.add('show');
-                settingsModal.setAttribute('aria-hidden', 'false');
-            };
-            const hideSettings = () => {
-                settingsModal.classList.remove('show');
-                settingsModal.setAttribute('aria-hidden', 'true');
-            };
-
-            settingsBtn && settingsBtn.addEventListener('click', showSettings);
-            closeSettings && closeSettings.addEventListener('click', hideSettings);
-            quickSettings && quickSettings.addEventListener('click', () => { hideSettings(); showSettings(); });
-        });
+        // Note: settings/open-close wiring happens inside app.js (setupEventListeners).
+        // Removing duplicate wiring here avoids double event listeners and race conditions.
     </script>
 
-    <!-- ---------- New fallback lightbox handler ---------- -->
+    <!-- ---------- New fallback lightbox handler (keeps your media overlay behavior) ---------- -->
     <script>
     (function () {
         /**

@@ -47,26 +47,34 @@ class STalk {
     }
 
     setupEventListeners() {
+        // safe helper to add listener only if element exists
+        const safeOn = (id, event, handler) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener(event, handler);
+        };
+
         // Login form
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        safeOn('loginForm', 'submit', (e) => {
             e.preventDefault();
             this.handleLogin();
         });
 
         // Settings modal
-        document.getElementById('settingsBtn').addEventListener('click', () => {
+        safeOn('settingsBtn', 'click', () => {
             this.showSettings();
         });
 
-        document.getElementById('closeSettings').addEventListener('click', () => {
+        safeOn('closeSettings', 'click', () => {
             this.hideSettings();
         });
 
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
-        themeToggle.addEventListener('change', (e) => {
-            this.toggleTheme();
-        });
+        if (themeToggle) {
+            themeToggle.addEventListener('change', (e) => {
+                this.toggleTheme();
+            });
+        }
 
         // Push toggle (settings UI element with id enablePushToggle is optional)
         const pushToggle = document.getElementById('enablePushToggle');
@@ -102,98 +110,130 @@ class STalk {
         }
 
         // Settings buttons
-        document.getElementById('changePasswordBtn').addEventListener('click', () => {
+        safeOn('changePasswordBtn', 'click', () => {
             this.handleChangePassword();
         });
 
-        document.getElementById('adminStatsBtn').addEventListener('click', () => {
+        safeOn('adminStatsBtn', 'click', () => {
             this.loadAdminStats();
         });
 
-        document.getElementById('userManagementBtn').addEventListener('click', () => {
+        safeOn('userManagementBtn', 'click', () => {
             this.showUserManagement();
         });
 
-        document.getElementById('logoutBtn').addEventListener('click', () => {
+        safeOn('logoutBtn', 'click', () => {
             this.handleLogout();
         });
 
         // Quick dropdown actions
-        document.getElementById('quickSettingsItem').addEventListener('click', () => {
+        safeOn('quickSettingsItem', 'click', () => {
             this.showSettings();
         });
 
-        document.getElementById('quickLogoutItem').addEventListener('click', () => {
+        safeOn('quickLogoutItem', 'click', () => {
             this.handleLogout();
         });
 
         // Profile picture upload
-        document.getElementById('profileImageUpload').addEventListener('change', (e) => {
-            this.handleProfileImageUpload(e.target.files[0]);
-        });
+        const profileImageUpload = document.getElementById('profileImageUpload');
+        if (profileImageUpload) {
+            profileImageUpload.addEventListener('change', (e) => {
+                this.handleProfileImageUpload(e.target.files[0]);
+            });
+        }
 
-        document.getElementById('profileAvatarLarge').addEventListener('click', () => {
-            document.getElementById('profileImageUpload').click();
-        });
+        const profileAvatarLarge = document.getElementById('profileAvatarLarge');
+        if (profileAvatarLarge) {
+            profileAvatarLarge.addEventListener('click', () => {
+                const upload = document.getElementById('profileImageUpload');
+                if (upload) upload.click();
+            });
+        }
 
         // File upload
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            this.handleFileUpload(e.target.files);
-        });
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileUpload(e.target.files);
+            });
+        }
 
-        document.getElementById('attachBtn').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
-        });
+        const attachBtn = document.getElementById('attachBtn');
+        if (attachBtn) {
+            attachBtn.addEventListener('click', () => {
+                const fi = document.getElementById('fileInput');
+                if (fi) fi.click();
+            });
+        }
 
         // Message input
         const messageInput = document.getElementById('messageInput');
-        messageInput.addEventListener('input', (e) => {
-            this.autoResizeTextarea(e.target);
-            this.updateSendButton();
-            this.handleTyping();
-        });
+        if (messageInput) {
+            messageInput.addEventListener('input', (e) => {
+                this.autoResizeTextarea(e.target);
+                this.updateSendButton();
+                this.handleTyping();
+            });
 
-        messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
-            }
-        });
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            });
+        }
 
         // Send button
-        document.getElementById('sendBtn').addEventListener('click', () => {
-            this.sendMessage();
-        });
+        const sendBtn = document.getElementById('sendBtn');
+        if (sendBtn) {
+            sendBtn.addEventListener('click', () => {
+                this.sendMessage();
+            });
+        }
 
         // User menu
-        document.getElementById('userAvatar').addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleUserDropdown();
-        });
+        const userAvatar = document.getElementById('userAvatar');
+        if (userAvatar) {
+            userAvatar.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleUserDropdown();
+            });
+        }
 
         // User search
-        document.getElementById('userSearch').addEventListener('input', (e) => {
-            this.filterUsers(e.target.value);
-        });
+        const userSearch = document.getElementById('userSearch');
+        if (userSearch) {
+            userSearch.addEventListener('input', (e) => {
+                this.filterUsers(e.target.value);
+            });
+        }
 
         // Back button
-        document.getElementById('backBtn').addEventListener('click', () => {
-            this.showChatList();
-        });
+        const backBtn = document.getElementById('backBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                this.showChatList();
+            });
+        }
 
         // Global click handlers
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.user-menu')) {
-                document.getElementById('userDropdown').classList.remove('show');
+                const dd = document.getElementById('userDropdown');
+                if (dd) dd.classList.remove('show');
             }
         });
 
         // Settings modal backdrop click
-        document.getElementById('settingsModal').addEventListener('click', (e) => {
-            if (e.target.id === 'settingsModal') {
-                this.hideSettings();
-            }
-        });
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) {
+            settingsModal.addEventListener('click', (e) => {
+                if (e.target.id === 'settingsModal') {
+                    this.hideSettings();
+                }
+            });
+        }
 
         // Drag and drop for files
         this.setupDragDrop();
@@ -217,7 +257,8 @@ class STalk {
     // Theme Management
     applyTheme(theme) {
         document.body.setAttribute('data-theme', theme);
-        document.getElementById('themeToggle').checked = theme === 'dark';
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) themeToggle.checked = theme === 'dark';
         localStorage.setItem('sTalk_theme', theme);
         this.currentTheme = theme;
     }
@@ -233,10 +274,12 @@ class STalk {
 
     // Settings Modal Management
     showSettings() {
-        document.getElementById('settingsModal').classList.add('show');
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) settingsModal.classList.add('show');
 
         if (this.currentUser && this.currentUser.role === 'Admin') {
-            document.getElementById('adminSection').style.display = 'block';
+            const adminSection = document.getElementById('adminSection');
+            if (adminSection) adminSection.style.display = 'block';
         }
 
         // ensure push/sound toggles reflect current state (if present)
@@ -249,7 +292,7 @@ class STalk {
         if (soundToggle) soundToggle.checked = !!this.soundEnabled;
 
         const avatarLarge = document.getElementById('profileAvatarLarge');
-        if (this.currentUser) {
+        if (avatarLarge && this.currentUser) {
             if (this.currentUser.profileImage) {
                 avatarLarge.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 avatarLarge.textContent = '';
@@ -261,7 +304,8 @@ class STalk {
     }
 
     hideSettings() {
-        document.getElementById('settingsModal').classList.remove('show');
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) settingsModal.classList.remove('show');
     }
 
     // Notification click handler (deep-link)
@@ -280,17 +324,18 @@ class STalk {
 
         // fallback: if chatId provided, try to deduce username from chatId
         if (data.chatId) {
-            // chatId format created by server: userA_userB (alphabetical). Find other participant
-            const parts = data.chatId.split('_');
-            const other = parts.find(p => p !== this.currentUser.username);
-            if (other) {
-                const found = Array.from(this.users.values()).find(u => u.username === other);
-                if (found) {
-                    await this.selectUser(found.id);
-                    window.focus();
-                    return;
+            try {
+                const parts = data.chatId.split('_');
+                const other = parts.find(p => p !== (this.currentUser && this.currentUser.username));
+                if (other) {
+                    const found = Array.from(this.users.values()).find(u => u.username === other);
+                    if (found) {
+                        await this.selectUser(found.id);
+                        window.focus();
+                        return;
+                    }
                 }
-            }
+            } catch (e) { /* ignore */ }
         }
 
         // fallback to open provided url or root
@@ -306,7 +351,7 @@ class STalk {
         if (this.isProcessingUserManagement) return;
         this.isProcessingUserManagement = true;
 
-        if (this.currentUser.role !== 'Admin') {
+        if (!this.currentUser || this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             this.isProcessingUserManagement = false;
             return;
@@ -364,7 +409,7 @@ class STalk {
                                         <div class="user-details">@${user.username} • ${user.role} • ${user.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
                                     </div>
                                     <div class="user-actions">
-                                        ${user.id !== this.currentUser.id ? `
+                                        ${user.id !== (this.currentUser && this.currentUser.id) ? `
                                             <button class="action-btn edit" onclick="app.editUser(${user.id})" title="Edit User">✏️</button>
                                             <button class="action-btn reset" onclick="app.resetUserPassword(${user.id})" title="Reset Password">🔑</button>
                                             <button class="action-btn delete" onclick="app.deleteUser(${user.id})" title="Delete User">🗑️</button>
@@ -648,13 +693,16 @@ class STalk {
 
             if (response.ok) {
                 const result = await response.json();
+                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.profileImage = result.profileImage;
                 this.updateUserInterface();
                 this.showToast('✅ Profile image updated!', 'success');
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
-                avatarLarge.textContent = '';
+                if (avatarLarge) {
+                    avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
+                    avatarLarge.textContent = '';
+                }
             } else {
                 const error = await response.json();
                 this.showToast(`❌ ${error.error || 'Upload failed'}`, 'error');
@@ -690,15 +738,20 @@ class STalk {
             });
 
             if (response.ok) {
+                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.avatar = value;
                 this.currentUser.profileImage = null;
                 this.updateUserInterface();
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                avatarLarge.style.backgroundImage = '';
-                avatarLarge.textContent = value;
+                if (avatarLarge) {
+                    avatarLarge.style.backgroundImage = '';
+                    avatarLarge.textContent = value;
+                }
 
                 this.showToast('✅ Avatar updated!', 'success');
+            } else {
+                this.showToast('❌ Failed to update avatar', 'error');
             }
         } catch (error) {
             this.showToast('❌ Failed to update avatar', 'error');
@@ -707,6 +760,7 @@ class STalk {
 
     setupDragDrop() {
         const messageContainer = document.getElementById('messagesContainer');
+        if (!messageContainer) return;
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             messageContainer.addEventListener(eventName, this.preventDefaults, false);
@@ -736,7 +790,7 @@ class STalk {
     }
 
     async handleFileUpload(files) {
-        if (!files.length || !this.selectedUserId) {
+        if (!files || files.length === 0 || !this.selectedUserId) {
             if (!this.selectedUserId) {
                 this.showToast('Please select a user to share files with', 'error');
             }
@@ -794,7 +848,8 @@ class STalk {
             this.showToast('❌ Upload failed. Please check your connection.', 'error');
         }
 
-        document.getElementById('fileInput').value = '';
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) fileInput.value = '';
     }
 
     async sendFileMessage(fileInfo) {
@@ -825,8 +880,11 @@ class STalk {
 
     // Authentication methods - Same as before (with push init on successful login)
     async handleLogin() {
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value;
+        const usernameEl = document.getElementById('loginUsername');
+        const passwordEl = document.getElementById('loginPassword');
+
+        const username = usernameEl ? usernameEl.value.trim() : '';
+        const password = passwordEl ? passwordEl.value : '';
 
         if (!username || !password) {
             this.showAlert('Please enter both username and password', 'error');
@@ -938,7 +996,7 @@ class STalk {
     }
 
     async loadAdminStats() {
-        if (this.currentUser.role !== 'Admin') {
+        if (!this.currentUser || this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             return;
         }
@@ -988,8 +1046,8 @@ class STalk {
         localStorage.removeItem('sTalk_token');
         localStorage.removeItem('sTalk_user');
 
-        if (this.socket) {
-            this.socket.disconnect();
+        if (this.socket && typeof this.socket.disconnect === 'function') {
+            try { this.socket.disconnect(); } catch(e){/*ignore*/}
         }
 
         this.hideSettings();
@@ -1054,89 +1112,107 @@ class STalk {
     updateUserInterface() {
         const userName = document.getElementById('userName');
         const userUsername = document.getElementById('userUsername');
-        if (userName) userName.textContent = this.currentUser.fullName;
-        if (userUsername) userUsername.textContent = `@${this.currentUser.username}`;
+        if (userName && this.currentUser) userName.textContent = this.currentUser.fullName || '';
+        if (userUsername && this.currentUser) userUsername.textContent = `@${this.currentUser.username || ''}`;
 
         const userAvatar = document.getElementById('userAvatar');
         if (userAvatar) {
-            if (this.currentUser.profileImage) {
+            if (this.currentUser && this.currentUser.profileImage) {
                 userAvatar.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 userAvatar.style.backgroundSize = 'cover';
                 userAvatar.style.backgroundPosition = 'center';
                 userAvatar.textContent = '';
             } else {
                 userAvatar.style.backgroundImage = '';
-                userAvatar.textContent = this.currentUser.avatar || 'A';
+                userAvatar.textContent = (this.currentUser && this.currentUser.avatar) ? this.currentUser.avatar : 'A';
             }
         }
     }
 
     // Socket connection with unread message tracking
     connectSocket() {
-        this.socket = io();
+        // Guard if io (socket.io client) is not present
+        if (typeof io !== 'function') {
+            console.warn('Socket.IO client (io) not found; skipping socket connection');
+            return;
+        }
 
-        this.socket.on('connect', () => {
-            console.log('🔌 Connected to sTalk server');
-            this.socket.emit('join_user_room', this.currentUser.id);
-        });
+        try {
+            this.socket = io();
 
-        this.socket.on('disconnect', () => {
-            console.log('🔌 Disconnected from server');
-            if (window.innerWidth > 768) {
-                this.showToast('📡 Connection lost - Reconnecting...', 'error');
-            }
-        });
-
-        this.socket.on('reconnect', () => {
-            console.log('🔌 Reconnected to server');
-            if (window.innerWidth > 768) {
-                this.showToast('📡 Connection restored!', 'success');
-            }
-            this.socket.emit('join_user_room', this.currentUser.id);
-        });
-
-        this.socket.on('message_received', (message) => {
-            console.log('📨 Message received:', message);
-
-            // Find sender user to get their ID
-            const senderUser = Array.from(this.users.values()).find(u => u.username === message.sender);
-            if (senderUser) {
-                // Increment unread count if not currently chatting with this user
-                if (!this.selectedUserId || this.selectedUserId != senderUser.id) {
-                    const currentCount = this.unreadCounts.get(senderUser.id) || 0;
-                    this.unreadCounts.set(senderUser.id, currentCount + 1);
-                    this.updateUserListUnreadIndicators();
+            this.socket.on('connect', () => {
+                console.log('🔌 Connected to sTalk server');
+                if (this.currentUser && this.currentUser.id) {
+                    this.socket.emit('join_user_room', this.currentUser.id);
                 }
+            });
 
-                // Add to UI if chatting with sender
-                if (this.selectedUserId && senderUser.id == this.selectedUserId) {
-                    this.addMessageToUI(message, true);
+            this.socket.on('disconnect', () => {
+                console.log('🔌 Disconnected from server');
+                if (window.innerWidth > 768) {
+                    this.showToast('📡 Connection lost - Reconnecting...', 'error');
                 }
-            }
+            });
 
-            // Show a local browser notification if page is hidden and permission is granted
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            this.socket.on('reconnect', () => {
+                console.log('🔌 Reconnected to server');
+                if (window.innerWidth > 768) {
+                    this.showToast('📡 Connection restored!', 'success');
+                }
+                if (this.currentUser && this.currentUser.id) {
+                    this.socket.emit('join_user_room', this.currentUser.id);
+                }
+            });
+
+            this.socket.on('message_received', (message) => {
                 try {
-                    this.showBrowserNotification({
-                        senderName: message.senderName || message.sender,
-                        content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
-                    });
-                } catch (e) { /* ignore */ }
-            }
+                    console.log('📨 Message received:', message);
 
-            // Play notification sound if enabled
-            if (this.soundEnabled) this.playNotificationSound();
-        });
+                    // Find sender user to get their ID
+                    const senderUser = Array.from(this.users.values()).find(u => u.username === message.sender);
+                    if (senderUser) {
+                        // Increment unread count if not currently chatting with this user
+                        if (!this.selectedUserId || this.selectedUserId != senderUser.id) {
+                            const currentCount = this.unreadCounts.get(senderUser.id) || 0;
+                            this.unreadCounts.set(senderUser.id, currentCount + 1);
+                            this.updateUserListUnreadIndicators();
+                        }
 
-        this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
-            if (userId !== this.currentUser.id && this.selectedUserId == userId) {
-                this.showTypingIndicator(userName, isTyping);
-            }
-        });
+                        // Add to UI if chatting with sender
+                        if (this.selectedUserId && senderUser.id == this.selectedUserId) {
+                            this.addMessageToUI(message, true);
+                        }
+                    }
 
-        this.socket.on('user_status_changed', ({ userId, isOnline }) => {
-            this.updateUserOnlineStatus(userId, isOnline);
-        });
+                    // Show a local browser notification if page is hidden and permission is granted
+                    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            this.showBrowserNotification({
+                                senderName: message.senderName || message.sender,
+                                content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
+                            });
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    // Play notification sound if enabled
+                    if (this.soundEnabled) this.playNotificationSound();
+                } catch (e) {
+                    console.error('Error processing incoming message', e);
+                }
+            });
+
+            this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
+                if (userId !== (this.currentUser && this.currentUser.id) && this.selectedUserId == userId) {
+                    this.showTypingIndicator(userName, isTyping);
+                }
+            });
+
+            this.socket.on('user_status_changed', ({ userId, isOnline }) => {
+                this.updateUserOnlineStatus(userId, isOnline);
+            });
+        } catch (err) {
+            console.error('Failed connecting socket', err);
+        }
     }
 
     playNotificationSound() {
@@ -1210,13 +1286,16 @@ class STalk {
             console.debug('Push not supported in this browser');
             // ensure UI toggle exists and displays false
             const pushToggle = document.getElementById('enablePushToggle');
-            if (pushToggle) pushToggle.checked = false;
+            if (pushToggle) {
+                pushToggle.checked = false;
+                pushToggle.disabled = true;
+            }
             return;
         }
 
         // Ensure pushClient is initialized if present
         try {
-            if (window.pushClient) {
+            if (window.pushClient && typeof window.pushClient.init === 'function') {
                 await window.pushClient.init();
             } else {
                 // Make sure SW is registered even if pushClient isn't included
@@ -1239,12 +1318,12 @@ class STalk {
                         if (reg) {
                             const sub = await reg.pushManager.getSubscription();
                             if (sub && this.token) {
-                                await window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : null;
+                                await (window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : Promise.resolve());
                             }
                         }
                     } else {
                         // ensure server has it (push-client's postSubscription may run inside subscribe)
-                        await window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : null;
+                        await (window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : Promise.resolve());
                     }
                 } else {
                     // attempt to get existing subscription and send to server manually
@@ -1276,15 +1355,18 @@ class STalk {
     // Ensure service worker is registered (used by push-client)
     async ensureServiceWorkerRegistered() {
         if (!('serviceWorker' in navigator)) return;
-        // register if not registered
-        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
-        if (!reg) {
-            try {
-                await navigator.serviceWorker.register('/sw.js');
-                console.log('Service worker registered by app init');
-            } catch (err) {
-                console.warn('Service worker registration failed', err);
+        try {
+            const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+            if (!reg) {
+                try {
+                    await navigator.serviceWorker.register('/sw.js');
+                    console.log('Service worker registered by app init');
+                } catch (err) {
+                    console.warn('Service worker registration failed', err);
+                }
             }
+        } catch (e) {
+            console.warn('Error checking service worker registration', e);
         }
     }
 
@@ -1295,6 +1377,7 @@ class STalk {
 
         // Default unchecked
         pushToggle.checked = false;
+        pushToggle.disabled = false;
 
         // If notifications unsupported, disable toggle
         if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
@@ -1360,9 +1443,9 @@ class STalk {
             if (window.pushClient) {
                 try {
                     // ensure pushClient initialized
-                    await window.pushClient.init();
+                    if (typeof window.pushClient.init === 'function') await window.pushClient.init();
                 } catch(e){/* continue */}
-                const sub = await window.pushClient.subscribe();
+                const sub = await (typeof window.pushClient.subscribe === 'function' ? window.pushClient.subscribe() : null);
                 // pushClient.subscribe() will post subscription to server itself
                 if (!sub) throw new Error('Subscription failed');
             } else {
@@ -1408,7 +1491,7 @@ class STalk {
     async disablePush() {
         try {
             // Prefer pushClient when available
-            if (window.pushClient) {
+            if (window.pushClient && typeof window.pushClient.unsubscribe === 'function') {
                 try {
                     await window.pushClient.unsubscribe();
                 } catch (e) {
@@ -1486,7 +1569,7 @@ class STalk {
 
         if (!userList) return;
 
-        if (users.length === 0) {
+        if (!Array.isArray(users) || users.length === 0) {
             userList.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">👥</div>
@@ -1531,13 +1614,13 @@ class STalk {
 
                 if (count > 0) {
                     userItem.classList.add('has-unread');
-                    nameElement.classList.add('unread');
-                    statusElement.textContent = `${count} unread messages`;
+                    if (nameElement) nameElement.classList.add('unread');
+                    if (statusElement) statusElement.textContent = `${count} unread messages`;
                 } else {
                     userItem.classList.remove('has-unread');
-                    nameElement.classList.remove('unread');
+                    if (nameElement) nameElement.classList.remove('unread');
                     const user = this.users.get(userId);
-                    statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
+                    if (statusElement) statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
                 }
             }
         });
@@ -1619,7 +1702,7 @@ class STalk {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
 
-        if (messages.length === 0) {
+        if (!Array.isArray(messages) || messages.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">💬</div>
@@ -1631,7 +1714,7 @@ class STalk {
         }
 
         const messagesHTML = messages.map(message => {
-            const isSent = message.sender === this.currentUser.username;
+            const isSent = message.sender === (this.currentUser && this.currentUser.username);
 
             let messageContent = '';
             if (message.messageType === 'file' && message.filePath) {
@@ -1760,19 +1843,22 @@ class STalk {
 
     // NEW: Generate link preview
     generateLinkPreview(url) {
-        // Simple preview - in a real app, you'd fetch metadata from the server
-        const domain = new URL(url).hostname;
+        try {
+            const domain = new URL(url).hostname;
 
-        return `
-            <div class="link-preview" onclick="window.open('${url}', '_blank')">
-                <div class="link-preview-favicon">🌐</div>
-                <div class="link-preview-info">
-                    <div class="link-preview-title">${this.escapeHtml(domain)}</div>
-                    <div class="link-preview-url">${this.escapeHtml(url)}</div>
+            return `
+                <div class="link-preview" onclick="window.open('${url}', '_blank')">
+                    <div class="link-preview-favicon">🌐</div>
+                    <div class="link-preview-info">
+                        <div class="link-preview-title">${this.escapeHtml(domain)}</div>
+                        <div class="link-preview-url">${this.escapeHtml(url)}</div>
+                    </div>
+                    <div class="link-preview-arrow">→</div>
                 </div>
-                <div class="link-preview-arrow">→</div>
-            </div>
-        `;
+            `;
+        } catch (e) {
+            return '';
+        }
     }
 
     // NEW: Media interaction methods
@@ -1820,6 +1906,7 @@ class STalk {
     }
 
     getFileIcon(mimeType) {
+        if (!mimeType) return '📎';
         if (mimeType.startsWith('image/')) return '🖼️';
         if (mimeType.startsWith('audio/')) return '🎵';
         if (mimeType.startsWith('video/')) return '🎥';
@@ -1832,16 +1919,18 @@ class STalk {
 
     async sendMessage() {
         const input = document.getElementById('messageInput');
-        const content = input.value.trim();
+        const content = input ? input.value.trim() : '';
 
         if (!content || !this.selectedUserId) return;
 
         const sendBtn = document.getElementById('sendBtn');
-        sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = true;
 
-        input.value = '';
-        this.autoResizeTextarea(input);
-        this.updateSendButton();
+        if (input) {
+            input.value = '';
+            this.autoResizeTextarea(input);
+            this.updateSendButton();
+        }
 
         try {
             const response = await fetch(`${this.API_BASE}/chats/${this.selectedUserId}/messages`, {
@@ -1857,18 +1946,22 @@ class STalk {
                 const message = await response.json();
                 this.addMessageToUI(message, true);
             } else {
-                input.value = content;
-                this.autoResizeTextarea(input);
-                this.updateSendButton();
+                if (input) {
+                    input.value = content;
+                    this.autoResizeTextarea(input);
+                    this.updateSendButton();
+                }
                 this.showToast('❌ Failed to send message', 'error');
             }
         } catch (error) {
-            input.value = content;
-            this.autoResizeTextarea(input);
-            this.updateSendButton();
+            if (input) {
+                input.value = content;
+                this.autoResizeTextarea(input);
+                this.updateSendButton();
+            }
             this.showToast('❌ Connection error', 'error');
         } finally {
-            sendBtn.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
         }
     }
 
@@ -1881,7 +1974,7 @@ class STalk {
             container.innerHTML = '';
         }
 
-        const isSent = message.sender === this.currentUser.username;
+        const isSent = message.sender === (this.currentUser && this.currentUser.username);
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
@@ -1921,12 +2014,16 @@ class STalk {
         // SQLite timestamps are in UTC format "YYYY-MM-DD HH:MM:SS"
         // We need to explicitly treat them as UTC, then convert to local time
         let date;
-        if (timestamp.includes('T')) {
-            // Already in ISO format
-            date = new Date(timestamp);
-        } else {
-            // SQLite format - add 'Z' to indicate UTC
-            date = new Date(timestamp.replace(' ', 'T') + 'Z');
+        try {
+            if (timestamp.includes('T')) {
+                // Already in ISO format
+                date = new Date(timestamp);
+            } else {
+                // SQLite format - add 'Z' to indicate UTC
+                date = new Date(timestamp.replace(' ', 'T') + 'Z');
+            }
+        } catch (e) {
+            return '';
         }
 
         const day = date.getDate();
@@ -1944,6 +2041,7 @@ class STalk {
     }
 
     autoResizeTextarea(textarea) {
+        if (!textarea) return;
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     }
@@ -1951,7 +2049,7 @@ class STalk {
     updateSendButton() {
         const input = document.getElementById('messageInput');
         const btn = document.getElementById('sendBtn');
-        if (btn) btn.disabled = !input.value.trim();
+        if (btn) btn.disabled = !(input && input.value.trim());
     }
 
     handleTyping() {
@@ -1960,23 +2058,28 @@ class STalk {
 
         if (!this.isTyping) {
             this.isTyping = true;
-            this.socket.emit('typing_start', {
-                userId: this.currentUser.id,
-                userName: this.currentUser.fullName
-            });
+            try {
+                this.socket.emit('typing_start', {
+                    userId: this.currentUser && this.currentUser.id,
+                    userName: this.currentUser && this.currentUser.fullName
+                });
+            } catch (e) { /* ignore */ }
         }
 
         clearTimeout(this.typingTimeout);
         this.typingTimeout = setTimeout(() => {
             this.isTyping = false;
-            this.socket.emit('typing_stop', {
-                userId: this.currentUser.id
-            });
+            try {
+                this.socket.emit('typing_stop', {
+                    userId: this.currentUser && this.currentUser.id
+                });
+            } catch (e) { /* ignore */ }
         }, 1000);
     }
 
     showTypingIndicator(userName, isTyping) {
         const status = document.getElementById('chatHeaderStatus');
+        if (!status) return;
         if (isTyping) {
             status.textContent = `${userName} is typing...`;
             status.style.fontStyle = 'italic';
@@ -2000,7 +2103,8 @@ class STalk {
                 if (!indicator) {
                     const newIndicator = document.createElement('div');
                     newIndicator.className = 'online-indicator';
-                    userItem.querySelector('.user-item-avatar').appendChild(newIndicator);
+                    const avatar = userItem.querySelector('.user-item-avatar');
+                    if (avatar) avatar.appendChild(newIndicator);
                 }
                 if (unreadCount === 0 && status) {
                     status.textContent = '🟢 Online';
@@ -2062,7 +2166,7 @@ class STalk {
 
     filterUsers(searchTerm) {
         const userItems = document.querySelectorAll('.user-item');
-        const term = searchTerm.toLowerCase();
+        const term = (searchTerm || '').toLowerCase();
 
         userItems.forEach(item => {
             const name = (item.querySelector('.user-item-name')?.textContent || '').toLowerCase();
@@ -2117,7 +2221,7 @@ class STalk {
         container.appendChild(toast);
 
         setTimeout(() => {
-            toast.remove();
+            try { toast.remove(); } catch(e){}
         }, 4000);
     }
 
@@ -2132,7 +2236,11 @@ class STalk {
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
-    window.app = new STalk();
+    try {
+        window.app = new STalk();
+    } catch (e) {
+        console.error('Failed to initialize sTalk app', e);
+    }
 });
 
 // Service Worker registration for PWA (if available)
