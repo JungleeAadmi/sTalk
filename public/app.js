@@ -24,10 +24,19 @@ class STalk {
             this.soundEnabled = this.soundEnabled === 'true';
         }
 
+        // Zoom configuration
+        this.mediaZoomConfig = {
+            maxScale: 4,
+            doubleTapScale: 2.2,
+            animationDuration: 200 // ms
+        };
+
         this.initializeApp();
         this.setupEventListeners();
         this.applyTheme(this.currentTheme);
     }
+
+    /* ----------------- Initialization & existing methods unchanged ----------------- */
 
     async initializeApp() {
         this.showLoading();
@@ -47,34 +56,26 @@ class STalk {
     }
 
     setupEventListeners() {
-        // safe helper to add listener only if element exists
-        const safeOn = (id, event, handler) => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener(event, handler);
-        };
-
         // Login form
-        safeOn('loginForm', 'submit', (e) => {
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleLogin();
         });
 
         // Settings modal
-        safeOn('settingsBtn', 'click', () => {
+        document.getElementById('settingsBtn').addEventListener('click', () => {
             this.showSettings();
         });
 
-        safeOn('closeSettings', 'click', () => {
+        document.getElementById('closeSettings').addEventListener('click', () => {
             this.hideSettings();
         });
 
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('change', (e) => {
-                this.toggleTheme();
-            });
-        }
+        themeToggle.addEventListener('change', (e) => {
+            this.toggleTheme();
+        });
 
         // Push toggle (settings UI element with id enablePushToggle is optional)
         const pushToggle = document.getElementById('enablePushToggle');
@@ -110,130 +111,98 @@ class STalk {
         }
 
         // Settings buttons
-        safeOn('changePasswordBtn', 'click', () => {
+        document.getElementById('changePasswordBtn').addEventListener('click', () => {
             this.handleChangePassword();
         });
 
-        safeOn('adminStatsBtn', 'click', () => {
+        document.getElementById('adminStatsBtn').addEventListener('click', () => {
             this.loadAdminStats();
         });
 
-        safeOn('userManagementBtn', 'click', () => {
+        document.getElementById('userManagementBtn').addEventListener('click', () => {
             this.showUserManagement();
         });
 
-        safeOn('logoutBtn', 'click', () => {
+        document.getElementById('logoutBtn').addEventListener('click', () => {
             this.handleLogout();
         });
 
         // Quick dropdown actions
-        safeOn('quickSettingsItem', 'click', () => {
+        document.getElementById('quickSettingsItem').addEventListener('click', () => {
             this.showSettings();
         });
 
-        safeOn('quickLogoutItem', 'click', () => {
+        document.getElementById('quickLogoutItem').addEventListener('click', () => {
             this.handleLogout();
         });
 
         // Profile picture upload
-        const profileImageUpload = document.getElementById('profileImageUpload');
-        if (profileImageUpload) {
-            profileImageUpload.addEventListener('change', (e) => {
-                this.handleProfileImageUpload(e.target.files[0]);
-            });
-        }
+        document.getElementById('profileImageUpload').addEventListener('change', (e) => {
+            this.handleProfileImageUpload(e.target.files[0]);
+        });
 
-        const profileAvatarLarge = document.getElementById('profileAvatarLarge');
-        if (profileAvatarLarge) {
-            profileAvatarLarge.addEventListener('click', () => {
-                const upload = document.getElementById('profileImageUpload');
-                if (upload) upload.click();
-            });
-        }
+        document.getElementById('profileAvatarLarge').addEventListener('click', () => {
+            document.getElementById('profileImageUpload').click();
+        });
 
         // File upload
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
-                this.handleFileUpload(e.target.files);
-            });
-        }
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            this.handleFileUpload(e.target.files);
+        });
 
-        const attachBtn = document.getElementById('attachBtn');
-        if (attachBtn) {
-            attachBtn.addEventListener('click', () => {
-                const fi = document.getElementById('fileInput');
-                if (fi) fi.click();
-            });
-        }
+        document.getElementById('attachBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
 
         // Message input
         const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-            messageInput.addEventListener('input', (e) => {
-                this.autoResizeTextarea(e.target);
-                this.updateSendButton();
-                this.handleTyping();
-            });
+        messageInput.addEventListener('input', (e) => {
+            this.autoResizeTextarea(e.target);
+            this.updateSendButton();
+            this.handleTyping();
+        });
 
-            messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    this.sendMessage();
-                }
-            });
-        }
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
+        });
 
         // Send button
-        const sendBtn = document.getElementById('sendBtn');
-        if (sendBtn) {
-            sendBtn.addEventListener('click', () => {
-                this.sendMessage();
-            });
-        }
+        document.getElementById('sendBtn').addEventListener('click', () => {
+            this.sendMessage();
+        });
 
         // User menu
-        const userAvatar = document.getElementById('userAvatar');
-        if (userAvatar) {
-            userAvatar.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleUserDropdown();
-            });
-        }
+        document.getElementById('userAvatar').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleUserDropdown();
+        });
 
         // User search
-        const userSearch = document.getElementById('userSearch');
-        if (userSearch) {
-            userSearch.addEventListener('input', (e) => {
-                this.filterUsers(e.target.value);
-            });
-        }
+        document.getElementById('userSearch').addEventListener('input', (e) => {
+            this.filterUsers(e.target.value);
+        });
 
         // Back button
-        const backBtn = document.getElementById('backBtn');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                this.showChatList();
-            });
-        }
+        document.getElementById('backBtn').addEventListener('click', () => {
+            this.showChatList();
+        });
 
         // Global click handlers
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.user-menu')) {
-                const dd = document.getElementById('userDropdown');
-                if (dd) dd.classList.remove('show');
+                document.getElementById('userDropdown').classList.remove('show');
             }
         });
 
         // Settings modal backdrop click
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) {
-            settingsModal.addEventListener('click', (e) => {
-                if (e.target.id === 'settingsModal') {
-                    this.hideSettings();
-                }
-            });
-        }
+        document.getElementById('settingsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'settingsModal') {
+                this.hideSettings();
+            }
+        });
 
         // Drag and drop for files
         this.setupDragDrop();
@@ -257,8 +226,7 @@ class STalk {
     // Theme Management
     applyTheme(theme) {
         document.body.setAttribute('data-theme', theme);
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) themeToggle.checked = theme === 'dark';
+        document.getElementById('themeToggle').checked = theme === 'dark';
         localStorage.setItem('sTalk_theme', theme);
         this.currentTheme = theme;
     }
@@ -274,12 +242,10 @@ class STalk {
 
     // Settings Modal Management
     showSettings() {
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) settingsModal.classList.add('show');
+        document.getElementById('settingsModal').classList.add('show');
 
         if (this.currentUser && this.currentUser.role === 'Admin') {
-            const adminSection = document.getElementById('adminSection');
-            if (adminSection) adminSection.style.display = 'block';
+            document.getElementById('adminSection').style.display = 'block';
         }
 
         // ensure push/sound toggles reflect current state (if present)
@@ -292,7 +258,7 @@ class STalk {
         if (soundToggle) soundToggle.checked = !!this.soundEnabled;
 
         const avatarLarge = document.getElementById('profileAvatarLarge');
-        if (avatarLarge && this.currentUser) {
+        if (this.currentUser) {
             if (this.currentUser.profileImage) {
                 avatarLarge.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 avatarLarge.textContent = '';
@@ -304,8 +270,7 @@ class STalk {
     }
 
     hideSettings() {
-        const settingsModal = document.getElementById('settingsModal');
-        if (settingsModal) settingsModal.classList.remove('show');
+        document.getElementById('settingsModal').classList.remove('show');
     }
 
     // Notification click handler (deep-link)
@@ -324,18 +289,17 @@ class STalk {
 
         // fallback: if chatId provided, try to deduce username from chatId
         if (data.chatId) {
-            try {
-                const parts = data.chatId.split('_');
-                const other = parts.find(p => p !== (this.currentUser && this.currentUser.username));
-                if (other) {
-                    const found = Array.from(this.users.values()).find(u => u.username === other);
-                    if (found) {
-                        await this.selectUser(found.id);
-                        window.focus();
-                        return;
-                    }
+            // chatId format created by server: userA_userB (alphabetical). Find other participant
+            const parts = data.chatId.split('_');
+            const other = parts.find(p => p !== this.currentUser.username);
+            if (other) {
+                const found = Array.from(this.users.values()).find(u => u.username === other);
+                if (found) {
+                    await this.selectUser(found.id);
+                    window.focus();
+                    return;
                 }
-            } catch (e) { /* ignore */ }
+            }
         }
 
         // fallback to open provided url or root
@@ -351,7 +315,7 @@ class STalk {
         if (this.isProcessingUserManagement) return;
         this.isProcessingUserManagement = true;
 
-        if (!this.currentUser || this.currentUser.role !== 'Admin') {
+        if (this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             this.isProcessingUserManagement = false;
             return;
@@ -409,7 +373,7 @@ class STalk {
                                         <div class="user-details">@${user.username} • ${user.role} • ${user.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
                                     </div>
                                     <div class="user-actions">
-                                        ${user.id !== (this.currentUser && this.currentUser.id) ? `
+                                        ${user.id !== this.currentUser.id ? `
                                             <button class="action-btn edit" onclick="app.editUser(${user.id})" title="Edit User">✏️</button>
                                             <button class="action-btn reset" onclick="app.resetUserPassword(${user.id})" title="Reset Password">🔑</button>
                                             <button class="action-btn delete" onclick="app.deleteUser(${user.id})" title="Delete User">🗑️</button>
@@ -693,16 +657,13 @@ class STalk {
 
             if (response.ok) {
                 const result = await response.json();
-                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.profileImage = result.profileImage;
                 this.updateUserInterface();
                 this.showToast('✅ Profile image updated!', 'success');
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                if (avatarLarge) {
-                    avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
-                    avatarLarge.textContent = '';
-                }
+                avatarLarge.style.backgroundImage = `url(${result.profileImage})`;
+                avatarLarge.textContent = '';
             } else {
                 const error = await response.json();
                 this.showToast(`❌ ${error.error || 'Upload failed'}`, 'error');
@@ -738,20 +699,15 @@ class STalk {
             });
 
             if (response.ok) {
-                if (!this.currentUser) this.currentUser = {};
                 this.currentUser.avatar = value;
                 this.currentUser.profileImage = null;
                 this.updateUserInterface();
 
                 const avatarLarge = document.getElementById('profileAvatarLarge');
-                if (avatarLarge) {
-                    avatarLarge.style.backgroundImage = '';
-                    avatarLarge.textContent = value;
-                }
+                avatarLarge.style.backgroundImage = '';
+                avatarLarge.textContent = value;
 
                 this.showToast('✅ Avatar updated!', 'success');
-            } else {
-                this.showToast('❌ Failed to update avatar', 'error');
             }
         } catch (error) {
             this.showToast('❌ Failed to update avatar', 'error');
@@ -760,7 +716,6 @@ class STalk {
 
     setupDragDrop() {
         const messageContainer = document.getElementById('messagesContainer');
-        if (!messageContainer) return;
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             messageContainer.addEventListener(eventName, this.preventDefaults, false);
@@ -790,7 +745,7 @@ class STalk {
     }
 
     async handleFileUpload(files) {
-        if (!files || files.length === 0 || !this.selectedUserId) {
+        if (!files.length || !this.selectedUserId) {
             if (!this.selectedUserId) {
                 this.showToast('Please select a user to share files with', 'error');
             }
@@ -848,8 +803,7 @@ class STalk {
             this.showToast('❌ Upload failed. Please check your connection.', 'error');
         }
 
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) fileInput.value = '';
+        document.getElementById('fileInput').value = '';
     }
 
     async sendFileMessage(fileInfo) {
@@ -880,11 +834,8 @@ class STalk {
 
     // Authentication methods - Same as before (with push init on successful login)
     async handleLogin() {
-        const usernameEl = document.getElementById('loginUsername');
-        const passwordEl = document.getElementById('loginPassword');
-
-        const username = usernameEl ? usernameEl.value.trim() : '';
-        const password = passwordEl ? passwordEl.value : '';
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
 
         if (!username || !password) {
             this.showAlert('Please enter both username and password', 'error');
@@ -996,7 +947,7 @@ class STalk {
     }
 
     async loadAdminStats() {
-        if (!this.currentUser || this.currentUser.role !== 'Admin') {
+        if (this.currentUser.role !== 'Admin') {
             this.showToast('❌ Admin access required', 'error');
             return;
         }
@@ -1046,8 +997,8 @@ class STalk {
         localStorage.removeItem('sTalk_token');
         localStorage.removeItem('sTalk_user');
 
-        if (this.socket && typeof this.socket.disconnect === 'function') {
-            try { this.socket.disconnect(); } catch(e){/*ignore*/}
+        if (this.socket) {
+            this.socket.disconnect();
         }
 
         this.hideSettings();
@@ -1112,107 +1063,89 @@ class STalk {
     updateUserInterface() {
         const userName = document.getElementById('userName');
         const userUsername = document.getElementById('userUsername');
-        if (userName && this.currentUser) userName.textContent = this.currentUser.fullName || '';
-        if (userUsername && this.currentUser) userUsername.textContent = `@${this.currentUser.username || ''}`;
+        if (userName) userName.textContent = this.currentUser.fullName;
+        if (userUsername) userUsername.textContent = `@${this.currentUser.username}`;
 
         const userAvatar = document.getElementById('userAvatar');
         if (userAvatar) {
-            if (this.currentUser && this.currentUser.profileImage) {
+            if (this.currentUser.profileImage) {
                 userAvatar.style.backgroundImage = `url(${this.currentUser.profileImage})`;
                 userAvatar.style.backgroundSize = 'cover';
                 userAvatar.style.backgroundPosition = 'center';
                 userAvatar.textContent = '';
             } else {
                 userAvatar.style.backgroundImage = '';
-                userAvatar.textContent = (this.currentUser && this.currentUser.avatar) ? this.currentUser.avatar : 'A';
+                userAvatar.textContent = this.currentUser.avatar || 'A';
             }
         }
     }
 
     // Socket connection with unread message tracking
     connectSocket() {
-        // Guard if io (socket.io client) is not present
-        if (typeof io !== 'function') {
-            console.warn('Socket.IO client (io) not found; skipping socket connection');
-            return;
-        }
+        this.socket = io();
 
-        try {
-            this.socket = io();
+        this.socket.on('connect', () => {
+            console.log('🔌 Connected to sTalk server');
+            this.socket.emit('join_user_room', this.currentUser.id);
+        });
 
-            this.socket.on('connect', () => {
-                console.log('🔌 Connected to sTalk server');
-                if (this.currentUser && this.currentUser.id) {
-                    this.socket.emit('join_user_room', this.currentUser.id);
+        this.socket.on('disconnect', () => {
+            console.log('🔌 Disconnected from server');
+            if (window.innerWidth > 768) {
+                this.showToast('📡 Connection lost - Reconnecting...', 'error');
+            }
+        });
+
+        this.socket.on('reconnect', () => {
+            console.log('🔌 Reconnected to server');
+            if (window.innerWidth > 768) {
+                this.showToast('📡 Connection restored!', 'success');
+            }
+            this.socket.emit('join_user_room', this.currentUser.id);
+        });
+
+        this.socket.on('message_received', (message) => {
+            console.log('📨 Message received:', message);
+
+            // Find sender user to get their ID
+            const senderUser = Array.from(this.users.values()).find(u => u.username === message.sender);
+            if (senderUser) {
+                // Increment unread count if not currently chatting with this user
+                if (!this.selectedUserId || this.selectedUserId != senderUser.id) {
+                    const currentCount = this.unreadCounts.get(senderUser.id) || 0;
+                    this.unreadCounts.set(senderUser.id, currentCount + 1);
+                    this.updateUserListUnreadIndicators();
                 }
-            });
 
-            this.socket.on('disconnect', () => {
-                console.log('🔌 Disconnected from server');
-                if (window.innerWidth > 768) {
-                    this.showToast('📡 Connection lost - Reconnecting...', 'error');
+                // Add to UI if chatting with sender
+                if (this.selectedUserId && senderUser.id == this.selectedUserId) {
+                    this.addMessageToUI(message, true);
                 }
-            });
+            }
 
-            this.socket.on('reconnect', () => {
-                console.log('🔌 Reconnected to server');
-                if (window.innerWidth > 768) {
-                    this.showToast('📡 Connection restored!', 'success');
-                }
-                if (this.currentUser && this.currentUser.id) {
-                    this.socket.emit('join_user_room', this.currentUser.id);
-                }
-            });
-
-            this.socket.on('message_received', (message) => {
+            // Show a local browser notification if page is hidden and permission is granted
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
                 try {
-                    console.log('📨 Message received:', message);
+                    this.showBrowserNotification({
+                        senderName: message.senderName || message.sender,
+                        content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
+                    });
+                } catch (e) { /* ignore */ }
+            }
 
-                    // Find sender user to get their ID
-                    const senderUser = Array.from(this.users.values()).find(u => u.username === message.sender);
-                    if (senderUser) {
-                        // Increment unread count if not currently chatting with this user
-                        if (!this.selectedUserId || this.selectedUserId != senderUser.id) {
-                            const currentCount = this.unreadCounts.get(senderUser.id) || 0;
-                            this.unreadCounts.set(senderUser.id, currentCount + 1);
-                            this.updateUserListUnreadIndicators();
-                        }
+            // Play notification sound if enabled
+            if (this.soundEnabled) this.playNotificationSound();
+        });
 
-                        // Add to UI if chatting with sender
-                        if (this.selectedUserId && senderUser.id == this.selectedUserId) {
-                            this.addMessageToUI(message, true);
-                        }
-                    }
+        this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
+            if (userId !== this.currentUser.id && this.selectedUserId == userId) {
+                this.showTypingIndicator(userName, isTyping);
+            }
+        });
 
-                    // Show a local browser notification if page is hidden and permission is granted
-                    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                        try {
-                            this.showBrowserNotification({
-                                senderName: message.senderName || message.sender,
-                                content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
-                            });
-                        } catch (e) { /* ignore */ }
-                    }
-
-                    // Play notification sound if enabled
-                    if (this.soundEnabled) this.playNotificationSound();
-                } catch (e) {
-                    console.error('Error processing incoming message', e);
-                }
-            });
-
-            this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
-                if (userId !== (this.currentUser && this.currentUser.id) && this.selectedUserId == userId) {
-                    this.showTypingIndicator(userName, isTyping);
-                }
-            });
-
-            this.socket.on('user_status_changed', ({ userId, isOnline }) => {
-                this.updateUserOnlineStatus(userId, isOnline);
-            });
-        } catch (err) {
-            console.error('Failed connecting socket', err);
-        }
+        this.socket.on('user_status_changed', ({ userId, isOnline }) => {
+            this.updateUserOnlineStatus(userId, isOnline);
+        });
     }
 
     playNotificationSound() {
@@ -1286,16 +1219,13 @@ class STalk {
             console.debug('Push not supported in this browser');
             // ensure UI toggle exists and displays false
             const pushToggle = document.getElementById('enablePushToggle');
-            if (pushToggle) {
-                pushToggle.checked = false;
-                pushToggle.disabled = true;
-            }
+            if (pushToggle) pushToggle.checked = false;
             return;
         }
 
         // Ensure pushClient is initialized if present
         try {
-            if (window.pushClient && typeof window.pushClient.init === 'function') {
+            if (window.pushClient) {
                 await window.pushClient.init();
             } else {
                 // Make sure SW is registered even if pushClient isn't included
@@ -1318,12 +1248,12 @@ class STalk {
                         if (reg) {
                             const sub = await reg.pushManager.getSubscription();
                             if (sub && this.token) {
-                                await (window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : Promise.resolve());
+                                await window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : null;
                             }
                         }
                     } else {
                         // ensure server has it (push-client's postSubscription may run inside subscribe)
-                        await (window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : Promise.resolve());
+                        await window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : null;
                     }
                 } else {
                     // attempt to get existing subscription and send to server manually
@@ -1355,18 +1285,15 @@ class STalk {
     // Ensure service worker is registered (used by push-client)
     async ensureServiceWorkerRegistered() {
         if (!('serviceWorker' in navigator)) return;
-        try {
-            const reg = await navigator.serviceWorker.getRegistration('/sw.js');
-            if (!reg) {
-                try {
-                    await navigator.serviceWorker.register('/sw.js');
-                    console.log('Service worker registered by app init');
-                } catch (err) {
-                    console.warn('Service worker registration failed', err);
-                }
+        // register if not registered
+        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        if (!reg) {
+            try {
+                await navigator.serviceWorker.register('/sw.js');
+                console.log('Service worker registered by app init');
+            } catch (err) {
+                console.warn('Service worker registration failed', err);
             }
-        } catch (e) {
-            console.warn('Error checking service worker registration', e);
         }
     }
 
@@ -1377,7 +1304,6 @@ class STalk {
 
         // Default unchecked
         pushToggle.checked = false;
-        pushToggle.disabled = false;
 
         // If notifications unsupported, disable toggle
         if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
@@ -1443,9 +1369,9 @@ class STalk {
             if (window.pushClient) {
                 try {
                     // ensure pushClient initialized
-                    if (typeof window.pushClient.init === 'function') await window.pushClient.init();
+                    await window.pushClient.init();
                 } catch(e){/* continue */}
-                const sub = await (typeof window.pushClient.subscribe === 'function' ? window.pushClient.subscribe() : null);
+                const sub = await window.pushClient.subscribe();
                 // pushClient.subscribe() will post subscription to server itself
                 if (!sub) throw new Error('Subscription failed');
             } else {
@@ -1491,7 +1417,7 @@ class STalk {
     async disablePush() {
         try {
             // Prefer pushClient when available
-            if (window.pushClient && typeof window.pushClient.unsubscribe === 'function') {
+            if (window.pushClient) {
                 try {
                     await window.pushClient.unsubscribe();
                 } catch (e) {
@@ -1569,7 +1495,7 @@ class STalk {
 
         if (!userList) return;
 
-        if (!Array.isArray(users) || users.length === 0) {
+        if (users.length === 0) {
             userList.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">👥</div>
@@ -1614,13 +1540,13 @@ class STalk {
 
                 if (count > 0) {
                     userItem.classList.add('has-unread');
-                    if (nameElement) nameElement.classList.add('unread');
-                    if (statusElement) statusElement.textContent = `${count} unread messages`;
+                    nameElement.classList.add('unread');
+                    statusElement.textContent = `${count} unread messages`;
                 } else {
                     userItem.classList.remove('has-unread');
-                    if (nameElement) nameElement.classList.remove('unread');
+                    nameElement.classList.remove('unread');
                     const user = this.users.get(userId);
-                    if (statusElement) statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
+                    statusElement.textContent = user?.isOnline ? '🟢 Online' : '⚪ Offline';
                 }
             }
         });
@@ -1702,7 +1628,7 @@ class STalk {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
 
-        if (!Array.isArray(messages) || messages.length === 0) {
+        if (messages.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">💬</div>
@@ -1714,10 +1640,16 @@ class STalk {
         }
 
         const messagesHTML = messages.map(message => {
-            const isSent = message.sender === (this.currentUser && this.currentUser.username);
+            const isSent = message.sender === this.currentUser.username;
 
             let messageContent = '';
-            if (message.messageType === 'file' && message.filePath) {
+            if (message.messageType === 'file' && (message.filePath || (message.fileInfo && message.fileInfo.path))) {
+                // normalize file path/name/type - support both message.file* and message.fileInfo.*
+                message._filePath = message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
+                message._fileName = message.fileName || (message.fileInfo && (message.fileInfo.originalName || message.fileInfo.fileName)) || 'file';
+                message._fileType = message.fileType || (message.fileInfo && (message.fileInfo.mimeType || message.fileInfo.fileType)) || '';
+                // support thumbnailPath if provided by server
+                message._thumbnailPath = message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
                 messageContent = this.renderEnhancedMediaMessage(message);
             } else {
                 messageContent = this.renderEnhancedTextMessage(message.content || '');
@@ -1735,20 +1667,36 @@ class STalk {
 
         container.innerHTML = messagesHTML;
         this.scrollToBottom();
+
+        // helper to avoid repeating code in the top map
+        function filePathFromFileInfo(fi) {
+            return fi.path || fi.filePath || '';
+        }
     }
 
     // NEW: Enhanced media message rendering with previews
     renderEnhancedMediaMessage(message) {
-        const fileName = message.fileName || 'Unknown file';
-        const fileSize = this.formatFileSize(message.fileSize || 0);
-        const filePath = message.filePath;
-        const mimeType = message.fileType || '';
+        const fileName = message._fileName || message.fileName || message.fileInfo?.originalName || 'Unknown file';
+        const fileSize = this.formatFileSize(message.fileSize || (message.fileInfo && message.fileInfo.size) || 0);
+        const filePath = message._filePath || message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
+        const mimeType = (message._fileType || message.fileType || (message.fileInfo && message.fileInfo.mimeType) || '').toLowerCase();
+        const thumbnail = message._thumbnailPath || message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
 
-        // Image preview (auto-download and display)
-        if (mimeType.startsWith('image/')) {
+        // Helper consistent across function
+        function filePathFromFileInfo(fi) {
+            return fi.path || fi.filePath || '';
+        }
+
+        // Image preview - use thumbnail for src if available, keep original in data-original-src
+        if (mimeType.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(fileName)) {
+            const thumbSrc = thumbnail || filePath;
             return `
                 <div class="media-message image-message">
-                    <img src="${filePath}" alt="${fileName}" class="media-preview" onclick="app.openMediaFullscreen('${filePath}', '${fileName}')">
+                    <img src="${thumbSrc}" alt="${this.escapeHtml(fileName)}" class="media-preview"
+                         data-original-src="${filePath}"
+                         data-original-name="${this.escapeHtml(fileName)}"
+                         data-mime="${this.escapeHtml(mimeType)}"
+                         onclick="app.openMediaFullscreenFromElement(this)">
                     <div class="media-info">
                         <div class="media-name">${this.escapeHtml(fileName)}</div>
                         <div class="media-size">${fileSize}</div>
@@ -1757,12 +1705,15 @@ class STalk {
             `;
         }
 
-        // Video preview with thumbnail and play button
-        if (mimeType.startsWith('video/')) {
+        // Video preview with thumbnail/poster if available
+        if (mimeType.startsWith('video/') || /\.(mp4|webm|mov|mkv|ogg|ogv)$/i.test(fileName)) {
+            const posterAttr = thumbnail ? `poster="${thumbnail}"` : '';
             return `
                 <div class="media-message video-message">
-                    <div class="video-preview" onclick="app.playVideo('${filePath}')">
-                        <video preload="metadata" class="video-thumbnail">
+                    <div class="video-preview" onclick="app.playVideoFromElement(this)">
+                        <video preload="metadata" class="video-thumbnail" ${posterAttr}
+                            data-original-src="${filePath}"
+                            data-original-name="${this.escapeHtml(fileName)}">
                             <source src="${filePath}" type="${mimeType}">
                         </video>
                         <div class="play-button">▶️</div>
@@ -1776,7 +1727,7 @@ class STalk {
         }
 
         // Audio preview
-        if (mimeType.startsWith('audio/')) {
+        if (mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|m4a)$/i.test(fileName)) {
             return `
                 <div class="media-message audio-message">
                     <div class="audio-controls">
@@ -1802,7 +1753,7 @@ class STalk {
                     <div class="file-name">${this.escapeHtml(fileName)}</div>
                     <div class="file-size">${fileSize}</div>
                 </div>
-                <a href="${filePath}" download="${fileName}" class="file-download" title="Download ${fileName}">
+                <a href="${filePath}" download="${this.escapeHtml(fileName)}" class="file-download" title="Download ${this.escapeHtml(fileName)}" rel="noopener noreferrer" target="_blank">
                     ⬇️
                 </a>
             </div>
@@ -1843,66 +1794,656 @@ class STalk {
 
     // NEW: Generate link preview
     generateLinkPreview(url) {
-        try {
-            const domain = new URL(url).hostname;
+        // Simple preview - in a real app, you'd fetch metadata from the server
+        const domain = new URL(url).hostname;
 
-            return `
-                <div class="link-preview" onclick="window.open('${url}', '_blank')">
-                    <div class="link-preview-favicon">🌐</div>
-                    <div class="link-preview-info">
-                        <div class="link-preview-title">${this.escapeHtml(domain)}</div>
-                        <div class="link-preview-url">${this.escapeHtml(url)}</div>
-                    </div>
-                    <div class="link-preview-arrow">→</div>
+        return `
+            <div class="link-preview" onclick="window.open('${url}', '_blank')">
+                <div class="link-preview-favicon">🌐</div>
+                <div class="link-preview-info">
+                    <div class="link-preview-title">${this.escapeHtml(domain)}</div>
+                    <div class="link-preview-url">${this.escapeHtml(url)}</div>
                 </div>
-            `;
-        } catch (e) {
-            return '';
+                <div class="link-preview-arrow">→</div>
+            </div>
+        `;
+    }
+
+    /* ------------------ NEW: Media interaction methods with zoom/download ------------------ */
+
+    // Called from onclick attribute on images
+    openMediaFullscreenFromElement(imgEl) {
+        const src = imgEl.dataset.originalSrc || imgEl.src || imgEl.getAttribute('src');
+        const title = imgEl.dataset.originalName || imgEl.alt || '';
+        const mime = imgEl.dataset.mime || '';
+        this.openMediaFullscreen(src, title, { mime, originalName: imgEl.dataset.originalName || '' });
+    }
+
+    // Called from onclick on .video-preview wrapper
+    playVideoFromElement(wrapperEl) {
+        // find video element
+        const video = wrapperEl.querySelector('video');
+        const src = video?.dataset.originalSrc || video?.querySelector('source')?.src || video?.src;
+        const title = video?.dataset.originalName || (wrapperEl.dataset && wrapperEl.dataset.originalName) || '';
+        const originalName = video?.dataset.originalName || this.extractFileNameFromUrl(src);
+        this.playVideo(src, { title, originalName });
+    }
+
+    // core full-screen image viewer (image)
+    openMediaFullscreen(src, title = '', opts = {}) {
+        if (!src) return;
+
+        // Build overlay elements
+        const overlay = document.createElement('div');
+        overlay.className = 'media-fullscreen-overlay';
+        overlay.style.opacity = 0;
+        overlay.style.transition = `opacity ${this.mediaZoomConfig.animationDuration}ms ease`;
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.zIndex = 6000;
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.background = 'rgba(0,0,0,0.88)';
+        overlay.style.padding = '20px';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'media-fullscreen-content';
+        wrapper.style.maxWidth = '98%';
+        wrapper.style.maxHeight = '98%';
+        wrapper.style.position = 'relative';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.gap = '8px';
+
+        // container for image that will get transforms
+        const imgContainer = document.createElement('div');
+        imgContainer.style.position = 'relative';
+        imgContainer.style.touchAction = 'none';
+        imgContainer.style.maxWidth = '100%';
+        imgContainer.style.maxHeight = '100%';
+        imgContainer.style.display = 'flex';
+        imgContainer.style.alignItems = 'center';
+        imgContainer.style.justifyContent = 'center';
+        imgContainer.style.overflow = 'hidden';
+
+        const image = document.createElement('img');
+        image.className = 'media-fullscreen-image';
+        image.src = src;
+        image.alt = title || '';
+        image.style.transition = `transform ${this.mediaZoomConfig.animationDuration}ms ease`;
+        image.style.transformOrigin = 'center center';
+        image.style.maxWidth = '100%';
+        image.style.maxHeight = '100%';
+        image.style.userSelect = 'none';
+        image.style.webkitUserDrag = 'none';
+        image.style.display = 'block';
+
+        imgContainer.appendChild(image);
+        wrapper.appendChild(imgContainer);
+
+        // title (below)
+        if (title) {
+            const titleEl = document.createElement('div');
+            titleEl.className = 'media-fullscreen-title';
+            titleEl.textContent = title;
+            titleEl.style.color = '#fff';
+            titleEl.style.opacity = '0.95';
+            titleEl.style.fontSize = '0.95rem';
+            titleEl.style.textAlign = 'center';
+            titleEl.style.wordBreak = 'break-word';
+            titleEl.style.maxWidth = '90%';
+            wrapper.appendChild(titleEl);
+        }
+
+        // bottom action bar (option 2 - bottom bar)
+        const actionBar = document.createElement('div');
+        actionBar.style.position = 'absolute';
+        actionBar.style.left = '0';
+        actionBar.style.right = '0';
+        actionBar.style.bottom = '0';
+        actionBar.style.padding = '10px 12px';
+        actionBar.style.display = 'flex';
+        actionBar.style.justifyContent = 'space-between';
+        actionBar.style.alignItems = 'center';
+        actionBar.style.gap = '8px';
+        actionBar.style.background = 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)';
+        actionBar.style.zIndex = 20;
+
+        // left: spacer / filename
+        const leftInfo = document.createElement('div');
+        leftInfo.style.color = '#fff';
+        leftInfo.style.fontSize = '0.95rem';
+        leftInfo.style.maxWidth = '70%';
+        leftInfo.style.overflow = 'hidden';
+        leftInfo.style.textOverflow = 'ellipsis';
+        leftInfo.style.whiteSpace = 'nowrap';
+        leftInfo.textContent = title || '';
+
+        // center: download button
+        const centerActions = document.createElement('div');
+        centerActions.style.display = 'flex';
+        centerActions.style.gap = '8px';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'btn-secondary';
+        downloadBtn.style.background = 'rgba(255,255,255,0.08)';
+        downloadBtn.style.border = '1px solid rgba(255,255,255,0.12)';
+        downloadBtn.style.color = '#fff';
+        downloadBtn.style.padding = '8px 10px';
+        downloadBtn.style.borderRadius = '10px';
+        downloadBtn.style.fontSize = '0.95rem';
+        downloadBtn.textContent = '⬇️ Download';
+        downloadBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.attemptDownload(src, opts.originalName || title || this.extractFileNameFromUrl(src));
+        });
+
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn-secondary';
+        openBtn.style.background = 'rgba(255,255,255,0.08)';
+        openBtn.style.border = '1px solid rgba(255,255,255,0.12)';
+        openBtn.style.color = '#fff';
+        openBtn.style.padding = '8px 10px';
+        openBtn.style.borderRadius = '10px';
+        openBtn.style.fontSize = '0.95rem';
+        openBtn.textContent = '🔗 Open';
+        openBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            window.open(src, '_blank', 'noopener');
+        });
+
+        centerActions.appendChild(downloadBtn);
+        centerActions.appendChild(openBtn);
+
+        // right: close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'media-fullscreen-close';
+        closeBtn.innerHTML = '✕';
+        closeBtn.style.background = 'rgba(0,0,0,0.6)';
+        closeBtn.style.border = 'none';
+        closeBtn.style.color = '#fff';
+        closeBtn.style.padding = '10px 12px';
+        closeBtn.style.borderRadius = '8px';
+        closeBtn.style.fontSize = '18px';
+        closeBtn.style.cursor = 'pointer';
+
+        actionBar.appendChild(leftInfo);
+        actionBar.appendChild(centerActions);
+        actionBar.appendChild(closeBtn);
+
+        wrapper.appendChild(actionBar);
+
+        overlay.appendChild(wrapper);
+        document.body.appendChild(overlay);
+
+        // animate in
+        requestAnimationFrame(() => {
+            overlay.style.opacity = 1;
+        });
+
+        // Setup zoom/pan handlers
+        const gestureState = {
+            scale: 1,
+            lastScale: 1,
+            startDist: 0,
+            originX: 0,
+            originY: 0,
+            panX: 0,
+            panY: 0,
+            lastPanX: 0,
+            lastPanY: 0,
+            doubleTapLast: 0,
+            startX: 0,
+            startY: 0,
+            isMouseDown: false
+        };
+
+        const maxScale = this.mediaZoomConfig.maxScale;
+        const doubleTapScale = this.mediaZoomConfig.doubleTapScale;
+
+        // Utilities to apply transform
+        const applyTransform = () => {
+            image.style.transform = `translate(${gestureState.panX}px, ${gestureState.panY}px) scale(${gestureState.scale})`;
+        };
+
+        // Clamp helper
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+        // Touch helpers
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx*dx + dy*dy);
+        }
+
+        // Convert a client point to image-space origin relative values (not perfect but good)
+        function calculateOrigin(clientX, clientY) {
+            const rect = image.getBoundingClientRect();
+            const ox = (clientX - rect.left) / rect.width;
+            const oy = (clientY - rect.top) / rect.height;
+            return { ox, oy };
+        }
+
+        // Pointer / Touch event handlers
+        const onTouchStart = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                e.preventDefault();
+                gestureState.startDist = getDistance(e.touches);
+                gestureState.lastScale = gestureState.scale;
+                // origin for scale
+                const origin = calculateOrigin((e.touches[0].clientX + e.touches[1].clientX)/2, (e.touches[0].clientY + e.touches[1].clientY)/2);
+                gestureState.originX = origin.ox;
+                gestureState.originY = origin.oy;
+            } else if (e.touches && e.touches.length === 1) {
+                // single touch - pan start
+                gestureState.lastPanX = gestureState.panX;
+                gestureState.lastPanY = gestureState.panY;
+                gestureState.startX = e.touches[0].clientX;
+                gestureState.startY = e.touches[0].clientY;
+            }
+        };
+
+        const onTouchMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                e.preventDefault();
+                const curDist = getDistance(e.touches);
+                const scaleFactor = curDist / (gestureState.startDist || curDist);
+                let newScale = gestureState.lastScale * scaleFactor;
+                newScale = clamp(newScale, 1, maxScale);
+                gestureState.scale = newScale;
+                applyTransform();
+            } else if (e.touches && e.touches.length === 1) {
+                if (gestureState.scale > 1) {
+                    e.preventDefault();
+                    const dx = e.touches[0].clientX - gestureState.startX;
+                    const dy = e.touches[0].clientY - gestureState.startY;
+                    gestureState.panX = gestureState.lastPanX + dx;
+                    gestureState.panY = gestureState.lastPanY + dy;
+                    applyTransform();
+                }
+            }
+        };
+
+        const onTouchEnd = (e) => {
+            // if ended and scale < 1 reset
+            if (!e.touches || e.touches.length === 0) {
+                gestureState.lastScale = gestureState.scale;
+                gestureState.lastPanX = gestureState.panX;
+                gestureState.lastPanY = gestureState.panY;
+
+                if (gestureState.scale === 1) {
+                    gestureState.panX = 0;
+                    gestureState.panY = 0;
+                    gestureState.lastPanX = 0;
+                    gestureState.lastPanY = 0;
+                    applyTransform();
+                } else {
+                    // clamp panning roughly so image doesn't slide too far
+                    const rect = image.getBoundingClientRect();
+                    const viewportW = window.innerWidth;
+                    const viewportH = window.innerHeight;
+                    const maxPanX = Math.max(0, (rect.width - viewportW)/2 + 20);
+                    const maxPanY = Math.max(0, (rect.height - viewportH)/2 + 20);
+                    gestureState.panX = clamp(gestureState.panX, -maxPanX, maxPanX);
+                    gestureState.panY = clamp(gestureState.panY, -maxPanY, maxPanY);
+                    gestureState.lastPanX = gestureState.panX;
+                    gestureState.lastPanY = gestureState.panY;
+                    applyTransform();
+                }
+            }
+        };
+
+        // Double-tap to zoom
+        const onDoubleTap = (ev) => {
+            const now = Date.now();
+            if (now - gestureState.doubleTapLast < 300) {
+                // double tap detected
+                if (gestureState.scale > 1.05) {
+                    // reset
+                    gestureState.scale = 1;
+                    gestureState.panX = 0;
+                    gestureState.panY = 0;
+                    gestureState.lastPanX = 0;
+                    gestureState.lastPanY = 0;
+                } else {
+                    // zoom into doubleTapScale centered at tap location
+                    const rect = image.getBoundingClientRect();
+                    const clickX = ev.clientX || (ev.touches && ev.touches[0].clientX);
+                    const clickY = ev.clientY || (ev.touches && ev.touches[0].clientY);
+                    const offsetX = clickX - rect.left - rect.width/2;
+                    const offsetY = clickY - rect.top - rect.height/2;
+                    gestureState.scale = doubleTapScale;
+                    // simple pan so clicked point moves towards center (approx)
+                    gestureState.panX = -offsetX * (gestureState.scale - 1);
+                    gestureState.panY = -offsetY * (gestureState.scale - 1);
+                }
+                applyTransform();
+            }
+            gestureState.doubleTapLast = now;
+        };
+
+        // Mouse wheel zoom for desktop
+        const onWheel = (ev) => {
+            if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // avoid interfering with browser zoom shortcuts
+            ev.preventDefault();
+            const delta = ev.deltaY;
+            const scaleChange = delta > 0 ? 0.9 : 1.1;
+            let newScale = gestureState.scale * scaleChange;
+            newScale = clamp(newScale, 1, maxScale);
+            gestureState.scale = newScale;
+            applyTransform();
+        };
+
+        // Mouse drag panning for desktop
+        const onMouseDown = (ev) => {
+            if (ev.button !== 0) return;
+            gestureState.isMouseDown = true;
+            gestureState.startX = ev.clientX;
+            gestureState.startY = ev.clientY;
+            gestureState.lastPanX = gestureState.panX;
+            gestureState.lastPanY = gestureState.panY;
+            ev.preventDefault();
+        };
+
+        const onMouseMove = (ev) => {
+            if (!gestureState.isMouseDown) return;
+            if (gestureState.scale > 1) {
+                const dx = ev.clientX - gestureState.startX;
+                const dy = ev.clientY - gestureState.startY;
+                gestureState.panX = gestureState.lastPanX + dx;
+                gestureState.panY = gestureState.lastPanY + dy;
+                applyTransform();
+            }
+        };
+
+        const onMouseUp = (ev) => {
+            if (gestureState.isMouseDown) {
+                gestureState.isMouseDown = false;
+                gestureState.lastPanX = gestureState.panX;
+                gestureState.lastPanY = gestureState.panY;
+            }
+        };
+
+        // Add listeners
+        image.addEventListener('touchstart', onTouchStart, { passive: false });
+        image.addEventListener('touchmove', onTouchMove, { passive: false });
+        image.addEventListener('touchend', onTouchEnd, { passive: false });
+        image.addEventListener('click', (ev) => {
+            // single click should not close; close if clicked outside image container is handled below
+            ev.stopPropagation();
+        });
+
+        // double-tap detection on container
+        imgContainer.addEventListener('touchend', onDoubleTap, { passive: true });
+        // mouse double click
+        imgContainer.addEventListener('dblclick', (ev) => {
+            onDoubleTap(ev);
+        });
+
+        // wheel zoom
+        imgContainer.addEventListener('wheel', onWheel, { passive: false });
+
+        // mouse drag
+        imgContainer.addEventListener('mousedown', onMouseDown, { passive: false });
+        window.addEventListener('mousemove', onMouseMove, { passive: false });
+        window.addEventListener('mouseup', onMouseUp, { passive: false });
+
+        // close overlay when clicking outside content
+        overlay.addEventListener('click', (ev) => {
+            if (ev.target === overlay) closeOverlay();
+        });
+
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeOverlay();
+        });
+
+        // cleanup function
+        const closeOverlay = () => {
+            // animate out
+            overlay.style.opacity = 0;
+            setTimeout(() => {
+                // remove listeners & element
+                try {
+                    image.removeEventListener('touchstart', onTouchStart);
+                    image.removeEventListener('touchmove', onTouchMove);
+                    image.removeEventListener('touchend', onTouchEnd);
+                    imgContainer.removeEventListener('touchend', onDoubleTap);
+                    imgContainer.removeEventListener('dblclick', onDoubleTap);
+                    imgContainer.removeEventListener('wheel', onWheel);
+                    imgContainer.removeEventListener('mousedown', onMouseDown);
+                    window.removeEventListener('mousemove', onMouseMove);
+                    window.removeEventListener('mouseup', onMouseUp);
+                    window.removeEventListener('keydown', onKey);
+                } catch (e) { /* ignore */ }
+                overlay.remove();
+            }, this.mediaZoomConfig.animationDuration + 20);
+        };
+
+        // track escape key to close
+        const onKey = (e) => {
+            if (e.key === 'Escape') closeOverlay();
+        };
+        window.addEventListener('keydown', onKey);
+
+        // ensure focus
+        setTimeout(() => {
+            image.focus && image.focus();
+        }, 50);
+    }
+
+    // core full-screen video player (with same bottom actions)
+    playVideo(src, opts = {}) {
+        if (!src) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'media-fullscreen-overlay';
+        overlay.style.opacity = 0;
+        overlay.style.transition = `opacity ${this.mediaZoomConfig.animationDuration}ms ease`;
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.zIndex = 6000;
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.background = 'rgba(0,0,0,0.88)';
+        overlay.style.padding = '20px';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'media-fullscreen-content';
+        wrapper.style.maxWidth = '98%';
+        wrapper.style.maxHeight = '98%';
+        wrapper.style.position = 'relative';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.gap = '8px';
+
+        const video = document.createElement('video');
+        video.className = 'media-fullscreen-video';
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '100%';
+        video.style.borderRadius = '8px';
+        video.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
+        video.style.background = '#000';
+
+        const source = document.createElement('source');
+        source.src = src;
+        video.appendChild(source);
+
+        wrapper.appendChild(video);
+
+        if (opts.title) {
+            const titleEl = document.createElement('div');
+            titleEl.className = 'media-fullscreen-title';
+            titleEl.textContent = opts.title;
+            titleEl.style.color = '#fff';
+            wrapper.appendChild(titleEl);
+        }
+
+        // bottom action bar same as image one
+        const actionBar = document.createElement('div');
+        actionBar.style.position = 'absolute';
+        actionBar.style.left = '0';
+        actionBar.style.right = '0';
+        actionBar.style.bottom = '0';
+        actionBar.style.padding = '10px 12px';
+        actionBar.style.display = 'flex';
+        actionBar.style.justifyContent = 'space-between';
+        actionBar.style.alignItems = 'center';
+        actionBar.style.gap = '8px';
+        actionBar.style.background = 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)';
+        actionBar.style.zIndex = 20;
+
+        const leftInfo = document.createElement('div');
+        leftInfo.style.color = '#fff';
+        leftInfo.style.fontSize = '0.95rem';
+        leftInfo.textContent = opts.title || '';
+
+        const centerActions = document.createElement('div');
+        centerActions.style.display = 'flex';
+        centerActions.style.gap = '8px';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'btn-secondary';
+        downloadBtn.style.background = 'rgba(255,255,255,0.08)';
+        downloadBtn.style.border = '1px solid rgba(255,255,255,0.12)';
+        downloadBtn.style.color = '#fff';
+        downloadBtn.style.padding = '8px 10px';
+        downloadBtn.style.borderRadius = '10px';
+        downloadBtn.style.fontSize = '0.95rem';
+        downloadBtn.textContent = '⬇️ Download';
+        downloadBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.attemptDownload(src, opts.originalName || this.extractFileNameFromUrl(src));
+        });
+
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn-secondary';
+        openBtn.style.background = 'rgba(255,255,255,0.08)';
+        openBtn.style.border = '1px solid rgba(255,255,255,0.12)';
+        openBtn.style.color = '#fff';
+        openBtn.style.padding = '8px 10px';
+        openBtn.style.borderRadius = '10px';
+        openBtn.style.fontSize = '0.95rem';
+        openBtn.textContent = '🔗 Open';
+        openBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            window.open(src, '_blank', 'noopener');
+        });
+
+        centerActions.appendChild(downloadBtn);
+        centerActions.appendChild(openBtn);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'media-fullscreen-close';
+        closeBtn.innerHTML = '✕';
+        closeBtn.style.background = 'rgba(0,0,0,0.6)';
+        closeBtn.style.border = 'none';
+        closeBtn.style.color = '#fff';
+        closeBtn.style.padding = '10px 12px';
+        closeBtn.style.borderRadius = '8px';
+        closeBtn.style.fontSize = '18px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeOverlay();
+        });
+
+        actionBar.appendChild(leftInfo);
+        actionBar.appendChild(centerActions);
+        actionBar.appendChild(closeBtn);
+
+        wrapper.appendChild(actionBar);
+
+        overlay.appendChild(wrapper);
+        document.body.appendChild(overlay);
+
+        // animate in
+        requestAnimationFrame(() => {
+            overlay.style.opacity = 1;
+        });
+
+        // close on outside click
+        overlay.addEventListener('click', (ev) => {
+            if (ev.target === overlay) closeOverlay();
+        });
+
+        function closeOverlay() {
+            overlay.style.opacity = 0;
+            setTimeout(() => {
+                try { video.pause(); } catch (e) {}
+                overlay.remove();
+            }, 250);
         }
     }
 
-    // NEW: Media interaction methods
-    openMediaFullscreen(src, title) {
-        // Create fullscreen overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'media-fullscreen-overlay';
-        overlay.innerHTML = `
-            <div class="media-fullscreen-content">
-                <button class="media-fullscreen-close" onclick="this.parentElement.parentElement.remove()">✕</button>
-                <img src="${src}" alt="${title}" class="media-fullscreen-image">
-                <div class="media-fullscreen-title">${this.escapeHtml(title)}</div>
-            </div>
-        `;
+    // attempt to download file; falls back to open-in-new-tab if download rejected (CORS)
+    async attemptDownload(url, originalName = '') {
+        if (!url) return;
+        const filename = this.generateDownloadFilename(originalName || this.extractFileNameFromUrl(url));
+        // Try using anchor download
+        try {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.rel = 'noopener noreferrer';
+            a.target = '_blank';
+            // Needed for Firefox in some cases:
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
 
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                overlay.remove();
+            // Try fetch->blob if same-origin or CORS allows it
+            try {
+                const resp = await fetch(url, { mode: 'cors' });
+                if (!resp.ok) throw new Error('Non-OK response');
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const a2 = document.createElement('a');
+                a2.href = objectUrl;
+                a2.download = filename;
+                document.body.appendChild(a2);
+                a2.click();
+                a2.remove();
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+            } catch (fetchErr) {
+                // likely CORS or cross-origin restriction; open in new tab for manual save
+                window.open(url, '_blank', 'noopener');
             }
-        });
-
-        document.body.appendChild(overlay);
+        } catch (err) {
+            // If the a.download approach fails, fallback to open in a new tab
+            window.open(url, '_blank', 'noopener');
+        }
     }
 
-    playVideo(src) {
-        // Create video player overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'media-fullscreen-overlay';
-        overlay.innerHTML = `
-            <div class="media-fullscreen-content">
-                <button class="media-fullscreen-close" onclick="this.parentElement.parentElement.remove()">✕</button>
-                <video controls autoplay class="media-fullscreen-video">
-                    <source src="${src}">
-                </video>
-            </div>
-        `;
+    // helper: generate filename with prefix to avoid duplicates
+    generateDownloadFilename(originalName) {
+        const now = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        const datePart = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const safeName = (originalName || 'file').replace(/[<>:"/\\|?*]+/g, '_');
+        return `sTalk-${datePart}-${safeName}`;
+    }
 
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                overlay.remove();
-            }
-        });
-
-        document.body.appendChild(overlay);
+    extractFileNameFromUrl(url) {
+        try {
+            const u = new URL(url, window.location.origin);
+            const pathname = u.pathname;
+            const idx = pathname.lastIndexOf('/');
+            return idx >= 0 ? pathname.slice(idx+1) : pathname || 'file';
+        } catch (e) {
+            // fallback
+            const parts = url.split('/');
+            return parts[parts.length-1] || 'file';
+        }
     }
 
     getFileIcon(mimeType) {
@@ -1919,18 +2460,16 @@ class STalk {
 
     async sendMessage() {
         const input = document.getElementById('messageInput');
-        const content = input ? input.value.trim() : '';
+        const content = input.value.trim();
 
         if (!content || !this.selectedUserId) return;
 
         const sendBtn = document.getElementById('sendBtn');
-        if (sendBtn) sendBtn.disabled = true;
+        sendBtn.disabled = true;
 
-        if (input) {
-            input.value = '';
-            this.autoResizeTextarea(input);
-            this.updateSendButton();
-        }
+        input.value = '';
+        this.autoResizeTextarea(input);
+        this.updateSendButton();
 
         try {
             const response = await fetch(`${this.API_BASE}/chats/${this.selectedUserId}/messages`, {
@@ -1946,22 +2485,18 @@ class STalk {
                 const message = await response.json();
                 this.addMessageToUI(message, true);
             } else {
-                if (input) {
-                    input.value = content;
-                    this.autoResizeTextarea(input);
-                    this.updateSendButton();
-                }
-                this.showToast('❌ Failed to send message', 'error');
-            }
-        } catch (error) {
-            if (input) {
                 input.value = content;
                 this.autoResizeTextarea(input);
                 this.updateSendButton();
+                this.showToast('❌ Failed to send message', 'error');
             }
+        } catch (error) {
+            input.value = content;
+            this.autoResizeTextarea(input);
+            this.updateSendButton();
             this.showToast('❌ Connection error', 'error');
         } finally {
-            if (sendBtn) sendBtn.disabled = false;
+            sendBtn.disabled = false;
         }
     }
 
@@ -1974,12 +2509,17 @@ class STalk {
             container.innerHTML = '';
         }
 
-        const isSent = message.sender === (this.currentUser && this.currentUser.username);
+        const isSent = message.sender === this.currentUser.username;
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
         let messageContent = '';
-        if (message.messageType === 'file' && message.filePath) {
+        if (message.messageType === 'file' && (message.filePath || (message.fileInfo && message.fileInfo.path))) {
+            // normalize for consistent rendering
+            message._filePath = message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
+            message._fileName = message.fileName || (message.fileInfo && (message.fileInfo.originalName || message.fileInfo.fileName)) || 'file';
+            message._fileType = message.fileType || (message.fileInfo && (message.fileInfo.mimeType || message.fileInfo.fileType)) || '';
+            message._thumbnailPath = message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
             messageContent = this.renderEnhancedMediaMessage(message);
         } else {
             messageContent = this.renderEnhancedTextMessage(message.content || '');
@@ -1996,6 +2536,10 @@ class STalk {
 
         if (scroll) {
             this.scrollToBottom();
+        }
+
+        function filePathFromFileInfo(fi) {
+            return fi.path || fi.filePath || '';
         }
     }
 
@@ -2014,16 +2558,12 @@ class STalk {
         // SQLite timestamps are in UTC format "YYYY-MM-DD HH:MM:SS"
         // We need to explicitly treat them as UTC, then convert to local time
         let date;
-        try {
-            if (timestamp.includes('T')) {
-                // Already in ISO format
-                date = new Date(timestamp);
-            } else {
-                // SQLite format - add 'Z' to indicate UTC
-                date = new Date(timestamp.replace(' ', 'T') + 'Z');
-            }
-        } catch (e) {
-            return '';
+        if (timestamp.includes('T')) {
+            // Already in ISO format
+            date = new Date(timestamp);
+        } else {
+            // SQLite format - add 'Z' to indicate UTC
+            date = new Date(timestamp.replace(' ', 'T') + 'Z');
         }
 
         const day = date.getDate();
@@ -2041,7 +2581,6 @@ class STalk {
     }
 
     autoResizeTextarea(textarea) {
-        if (!textarea) return;
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     }
@@ -2049,7 +2588,7 @@ class STalk {
     updateSendButton() {
         const input = document.getElementById('messageInput');
         const btn = document.getElementById('sendBtn');
-        if (btn) btn.disabled = !(input && input.value.trim());
+        if (btn) btn.disabled = !input.value.trim();
     }
 
     handleTyping() {
@@ -2058,28 +2597,23 @@ class STalk {
 
         if (!this.isTyping) {
             this.isTyping = true;
-            try {
-                this.socket.emit('typing_start', {
-                    userId: this.currentUser && this.currentUser.id,
-                    userName: this.currentUser && this.currentUser.fullName
-                });
-            } catch (e) { /* ignore */ }
+            this.socket.emit('typing_start', {
+                userId: this.currentUser.id,
+                userName: this.currentUser.fullName
+            });
         }
 
         clearTimeout(this.typingTimeout);
         this.typingTimeout = setTimeout(() => {
             this.isTyping = false;
-            try {
-                this.socket.emit('typing_stop', {
-                    userId: this.currentUser && this.currentUser.id
-                });
-            } catch (e) { /* ignore */ }
+            this.socket.emit('typing_stop', {
+                userId: this.currentUser.id
+            });
         }, 1000);
     }
 
     showTypingIndicator(userName, isTyping) {
         const status = document.getElementById('chatHeaderStatus');
-        if (!status) return;
         if (isTyping) {
             status.textContent = `${userName} is typing...`;
             status.style.fontStyle = 'italic';
@@ -2103,8 +2637,7 @@ class STalk {
                 if (!indicator) {
                     const newIndicator = document.createElement('div');
                     newIndicator.className = 'online-indicator';
-                    const avatar = userItem.querySelector('.user-item-avatar');
-                    if (avatar) avatar.appendChild(newIndicator);
+                    userItem.querySelector('.user-item-avatar').appendChild(newIndicator);
                 }
                 if (unreadCount === 0 && status) {
                     status.textContent = '🟢 Online';
@@ -2166,7 +2699,7 @@ class STalk {
 
     filterUsers(searchTerm) {
         const userItems = document.querySelectorAll('.user-item');
-        const term = (searchTerm || '').toLowerCase();
+        const term = searchTerm.toLowerCase();
 
         userItems.forEach(item => {
             const name = (item.querySelector('.user-item-name')?.textContent || '').toLowerCase();
@@ -2221,7 +2754,7 @@ class STalk {
         container.appendChild(toast);
 
         setTimeout(() => {
-            try { toast.remove(); } catch(e){}
+            toast.remove();
         }, 4000);
     }
 
@@ -2236,11 +2769,7 @@ class STalk {
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
-    try {
-        window.app = new STalk();
-    } catch (e) {
-        console.error('Failed to initialize sTalk app', e);
-    }
+    window.app = new STalk();
 });
 
 // Service Worker registration for PWA (if available)

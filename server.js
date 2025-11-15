@@ -445,7 +445,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
             gender: user.gender,
             role: user.role,
             avatar: user.avatar,
-            profileImage: user.profile_image ? `/uploads/profiles/${path.basename(user.profile_image)}` : null,
+            profileImage: user.profile_image ? user.profile_image : null,
             themePreference: user.theme_preference
         });
     });
@@ -763,7 +763,6 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
             id: user.id,
             username: user.username,
             fullName: user.full_name,
-            gender: user.gender,
             role: user.role,
             avatar: user.avatar,
             profileImage: user.profile_image ? user.profile_image : null,

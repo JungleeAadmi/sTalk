@@ -1986,5 +1986,36 @@
     })();
     </script>
 
+    <!-- Service Worker registration & message forwarding to app.js -->
+    <script>
+      (function () {
+        if ('serviceWorker' in navigator) {
+          // register service worker at site root (/sw.js)
+          window.addEventListener('load', async () => {
+            try {
+              const reg = await navigator.serviceWorker.register('/sw.js');
+              console.log('ServiceWorker registered with scope:', reg.scope);
+            } catch (err) {
+              console.warn('ServiceWorker registration failed:', err);
+            }
+          });
+        }
+
+        // Forward messages from the SW to your app instance (if present)
+        navigator.serviceWorker && navigator.serviceWorker.addEventListener && navigator.serviceWorker.addEventListener('message', (ev) => {
+          try {
+            if (window.app && typeof window.app.handleServiceWorkerMessage === 'function') {
+              window.app.handleServiceWorkerMessage(ev.data);
+            } else {
+              // Generic fallback: dispatch a DOM event so app.js can pick it up
+              const event = new CustomEvent('swmessage', { detail: ev.data });
+              window.dispatchEvent(event);
+            }
+          } catch (e) {
+            console.warn('Error forwarding SW message to app:', e);
+          }
+        });
+      })();
+    </script>
 </body>
 </html>
