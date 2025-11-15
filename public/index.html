@@ -1891,39 +1891,119 @@
          */
 
         function createOverlay(contentEl, title) {
-            const overlay = document.createElement('div');
-            overlay.className = 'media-fullscreen-overlay';
-            overlay.innerHTML = ''; // we'll append nodes for better control
+    const overlay = document.createElement('div');
+    overlay.className = 'media-fullscreen-overlay';
+    overlay.innerHTML = ''; // we'll append nodes for better control
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
 
-            const wrapper = document.createElement('div');
-            wrapper.className = 'media-fullscreen-content';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'media-fullscreen-content';
+    wrapper.tabIndex = -1; // allow focus
 
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'media-fullscreen-close';
-            closeBtn.innerHTML = '✕';
-            closeBtn.addEventListener('click', () => overlay.remove());
+    // Accessible close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'media-fullscreen-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close viewer');
+    closeBtn.tabIndex = 0;
+    closeBtn.innerHTML = '✕';
 
-            wrapper.appendChild(closeBtn);
-            wrapper.appendChild(contentEl);
-
-            if (title) {
-                const t = document.createElement('div');
-                t.className = 'media-fullscreen-title';
-                t.textContent = title;
-                wrapper.appendChild(t);
-            }
-
-            overlay.appendChild(wrapper);
-
-            // close when clicking outside content
-            overlay.addEventListener('click', (ev) => {
-                if (ev.target === overlay) overlay.remove();
-            });
-
-            document.body.appendChild(overlay);
-
-            return overlay;
+    const stopClick = (ev) => ev.stopPropagation();
+    closeBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        closeOverlay();
+    });
+    closeBtn.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            closeOverlay();
         }
+    });
+    closeBtn.addEventListener('click', stopClick);
+
+    // append nodes
+    wrapper.appendChild(closeBtn);
+    wrapper.appendChild(contentEl);
+
+    if (title) {
+        const t = document.createElement('div');
+        t.className = 'media-fullscreen-title';
+        t.textContent = title;
+        wrapper.appendChild(t);
+    }
+
+    overlay.appendChild(wrapper);
+
+    // close when clicking outside content
+    overlay.addEventListener('click', (ev) => {
+        if (ev.target === overlay) closeOverlay();
+    });
+
+    // keyboard: close on Escape and trap focus (simple)
+    const previouslyFocused = document.activeElement;
+    const onKey = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeOverlay();
+        } else if (e.key === 'Tab') {
+            // keep tab inside wrapper (basic trap)
+            const focusable = wrapper.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    };
+    window.addEventListener('keydown', onKey);
+
+    // swipe down on mobile (simple)
+    let touchStartY = null;
+    const onTouchStart = (ev) => {
+        if (ev.touches && ev.touches.length === 1) touchStartY = ev.touches[0].clientY;
+    };
+    const onTouchMove = (ev) => {
+        if (!touchStartY) return;
+        const curY = ev.touches[0].clientY;
+        const delta = curY - touchStartY;
+        if (delta > 80) {
+            closeOverlay();
+            touchStartY = null;
+        }
+    };
+    wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
+    wrapper.addEventListener('touchmove', onTouchMove, { passive: true });
+
+    // append overlay and focus the wrapper (for screen readers / keyboard)
+    document.body.appendChild(overlay);
+    // Wait a tick to allow DOM insertion
+    setTimeout(() => {
+        wrapper.focus();
+        // focus close button for quicker dismissal
+        closeBtn.focus();
+    }, 40);
+
+    // cleanup / close
+    function closeOverlay() {
+        try {
+            window.removeEventListener('keydown', onKey);
+            wrapper.removeEventListener('touchstart', onTouchStart);
+            wrapper.removeEventListener('touchmove', onTouchMove);
+        } catch (e) {}
+        // animate out if you have transitions; here we just remove
+        overlay.remove();
+        try { previouslyFocused && previouslyFocused.focus(); } catch (e) {}
+    }
+
+    return overlay;
+}
+
 
         // On click delegation
         document.addEventListener('click', function (ev) {
