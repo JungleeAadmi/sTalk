@@ -31,9 +31,20 @@ class STalk {
             animationDuration: 200 // ms
         };
 
+        // Reusable audio context to avoid creating many instances
+        this._audioContext = null;
+
         this.initializeApp();
         this.setupEventListeners();
         this.applyTheme(this.currentTheme);
+
+        // Ensure audio context is closed on pagehide to free resources
+        window.addEventListener('pagehide', () => {
+            if (this._audioContext && this._audioContext.close) {
+                this._audioContext.close().catch(()=>{});
+                this._audioContext = null;
+            }
+        }, { passive: true });
     }
 
     /* ----------------- Initialization & existing methods unchanged ----------------- */
@@ -98,6 +109,39 @@ class STalk {
                 }
             });
         }
+
+        // Request permission button & iOS instructions wiring
+        const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+        if (requestPermissionBtn) {
+            requestPermissionBtn.style.display = 'none';
+            requestPermissionBtn.addEventListener('click', async () => {
+                const perm = await this.requestNotificationPermission();
+                if (perm === 'granted') {
+                    this.showToast('✅ Notifications permission granted', 'success');
+                    await this.refreshPushToggleState();
+                } else {
+                    this.showToast('❌ Notifications permission not granted', 'error');
+                }
+            });
+        }
+
+        const showIOSInstructionsBtn = document.getElementById('showIOSInstructionsBtn');
+        if (showIOSInstructionsBtn) {
+            showIOSInstructionsBtn.addEventListener('click', () => {
+                const modal = document.getElementById('iosInstructionModal');
+                if (modal) modal.classList.add('show');
+            });
+        }
+
+        const iosCloseBtn = document.getElementById('iosCloseBtn');
+        if (iosCloseBtn) iosCloseBtn.addEventListener('click', () => {
+            const modal = document.getElementById('iosInstructionModal');
+            if (modal) modal.classList.remove('show');
+        });
+        const iosOpenSafariBtn = document.getElementById('iosOpenSafariBtn');
+        if (iosOpenSafariBtn) iosOpenSafariBtn.addEventListener('click', () => {
+            alert('Open this page in Safari, then tap Share → Add to Home Screen.');
+        });
 
         // Sound toggle
         const soundToggle = document.getElementById('enableSoundToggle');
@@ -194,6 +238,29 @@ class STalk {
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.user-menu')) {
                 document.getElementById('userDropdown').classList.remove('show');
+            }
+        });
+
+        // Delegated click & keyboard handler for link previews
+        document.addEventListener('click', (ev) => {
+            const lp = ev.target.closest && ev.target.closest('.link-preview');
+            if (lp) {
+                const url = lp.getAttribute('data-link-url');
+                if (url) window.open(url, '_blank', 'noopener');
+            }
+        });
+
+        // support keyboard activation (Enter/Space) for link-preview elements
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                const active = document.activeElement;
+                if (active && active.classList && active.classList.contains('link-preview')) {
+                    const url = active.getAttribute('data-link-url');
+                    if (url) {
+                        ev.preventDefault();
+                        window.open(url, '_blank', 'noopener');
+                    }
+                }
             }
         });
 
@@ -1151,22 +1218,33 @@ class STalk {
     playNotificationSound() {
         if (!this.soundEnabled) return;
         try {
-            // Use Web Audio API for short beep
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) return;
-            const audioContext = new AudioContext();
+            // Reuse single audio context to avoid creating many instances
+            if (!this._audioContext) {
+                this._audioContext = new AudioContext();
+                // resume on user gesture if suspended
+                if (this._audioContext.state === 'suspended') {
+                    const resume = async () => {
+                        try { await this._audioContext.resume(); } catch(e){}
+                        window.removeEventListener('click', resume);
+                        window.removeEventListener('touchstart', resume);
+                    };
+                    window.addEventListener('click', resume, { once: true });
+                    window.addEventListener('touchstart', resume, { once: true });
+                }
+            }
+            const audioContext = this._audioContext;
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             oscillator.type = 'sine';
             oscillator.frequency.value = 1000;
-            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
             oscillator.start();
             setTimeout(() => {
-                oscillator.stop();
-                // close context to free resources
-                if (audioContext.close) audioContext.close().catch(()=>{});
+                try { oscillator.stop(); } catch (e) {}
             }, 100);
         } catch (error) {
             // Silent fail if audio not supported
@@ -1248,12 +1326,20 @@ class STalk {
                         if (reg) {
                             const sub = await reg.pushManager.getSubscription();
                             if (sub && this.token) {
-                                await window.pushClient.postSubscription ? window.pushClient.postSubscription(sub) : null;
+                                const subData = sub && typeof sub.toJSON === 'function' ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
+                                await fetch('/api/push/subscribe', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${this.token}`
+                                    },
+                                    body: JSON.stringify({ subscription: subData })
+                                }).catch(()=>{});
                             }
                         }
                     } else {
                         // ensure server has it (push-client's postSubscription may run inside subscribe)
-                        await window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : null;
+                        try { await window.pushClient.postSubscription ? window.pushClient.postSubscription(existing) : null; } catch(e){}
                     }
                 } else {
                     // attempt to get existing subscription and send to server manually
@@ -1261,15 +1347,15 @@ class STalk {
                     if (reg) {
                         const sub = await reg.pushManager.getSubscription();
                         if (sub && this.token) {
-                            // send subscription to server
+                            const subData = sub && typeof sub.toJSON === 'function' ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
                             await fetch('/api/push/subscribe', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${this.token}`
                                 },
-                                body: JSON.stringify({ subscription: sub })
-                            });
+                                body: JSON.stringify({ subscription: subData })
+                            }).catch(()=>{});
                         }
                     }
                 }
@@ -1316,6 +1402,9 @@ class STalk {
         if (Notification.permission === 'denied') {
             pushToggle.checked = false;
             pushToggle.disabled = false;
+            // show request button for convenience
+            const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+            if (requestPermissionBtn) requestPermissionBtn.style.display = 'none';
             return;
         }
 
@@ -1338,6 +1427,14 @@ class STalk {
                 pushToggle.checked = false;
                 this.pushEnabled = false;
                 localStorage.setItem('sTalk_push_enabled', 'false');
+
+                // If permission not yet requested and on desktop show request button
+                const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+                if (requestPermissionBtn && Notification.permission !== 'granted') {
+                    requestPermissionBtn.style.display = 'inline-block';
+                } else if (requestPermissionBtn) {
+                    requestPermissionBtn.style.display = 'none';
+                }
             }
         } catch (e) {
             console.warn('Failed to determine push subscription state', e);
@@ -1388,14 +1485,15 @@ class STalk {
                     applicationServerKey: this.urlBase64ToUint8Array(publicKey)
                 });
 
-                // send subscription to server
+                // send subscription to server (use toJSON to serialize)
+                const subData = sub && typeof sub.toJSON === 'function' ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
                 await fetch('/api/push/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${this.token}`
                     },
-                    body: JSON.stringify({ subscription: sub })
+                    body: JSON.stringify({ subscription: subData })
                 });
             }
 
@@ -1428,15 +1526,16 @@ class STalk {
                 if (reg) {
                     const sub = await reg.pushManager.getSubscription();
                     if (sub && this.token) {
-                        // notify server to remove subscription
+                        // notify server to remove subscription (use sub.toJSON to pass plain data)
+                        const subData = sub && typeof sub.toJSON === 'function' ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
                         await fetch('/api/push/unsubscribe', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${this.token}`
                             },
-                            body: JSON.stringify({ endpoint: sub.endpoint })
-                        });
+                            body: JSON.stringify({ endpoint: subData.endpoint || subData })
+                        }).catch(()=>{});
                         await sub.unsubscribe();
                     }
                 }
@@ -1792,21 +1891,26 @@ class STalk {
         return renderedContent;
     }
 
-    // NEW: Generate link preview
+    // NEW: Generate link preview (safe - uses data attribute, no inline onclick)
     generateLinkPreview(url) {
-        // Simple preview - in a real app, you'd fetch metadata from the server
-        const domain = new URL(url).hostname;
-
-        return `
-            <div class="link-preview" onclick="window.open('${url}', '_blank')">
-                <div class="link-preview-favicon">🌐</div>
-                <div class="link-preview-info">
-                    <div class="link-preview-title">${this.escapeHtml(domain)}</div>
-                    <div class="link-preview-url">${this.escapeHtml(url)}</div>
+        try {
+            const u = new URL(url);
+            const domain = u.hostname;
+            const safeUrl = this.escapeHtml(url);
+            // We will render a container with data-url so delegation can open it safely
+            return `
+                <div class="link-preview" data-link-url="${safeUrl}" tabindex="0" role="button" aria-label="Open link ${this.escapeHtml(domain)}">
+                    <div class="link-preview-favicon">🌐</div>
+                    <div class="link-preview-info">
+                        <div class="link-preview-title">${this.escapeHtml(domain)}</div>
+                        <div class="link-preview-url">${safeUrl}</div>
+                    </div>
+                    <div class="link-preview-arrow">→</div>
                 </div>
-                <div class="link-preview-arrow">→</div>
-            </div>
-        `;
+            `;
+        } catch (e) {
+            return '';
+        }
     }
 
     /* ------------------ NEW: Media interaction methods with zoom/download ------------------ */
