@@ -2443,7 +2443,6 @@ class STalk {
 
     // attempt to download file; falls back to open-in-new-tab if download rejected (CORS)
    // attempt to download/share a file; prefers native share sheet, falls back to anchor download or open-in-new-tab
-// attempt to download/share a file; prefers native share sheet, falls back to anchor download or open-in-new-tab
 async attemptDownload(url, originalName = '') {
     if (!url) return;
     const filename = this.generateDownloadFilename(originalName || this.extractFileNameFromUrl(url));
@@ -2498,7 +2497,6 @@ async attemptDownload(url, originalName = '') {
         openInNewTab(url);
     }
 }
-
 
 
     // helper: generate filename with prefix to avoid duplicates
