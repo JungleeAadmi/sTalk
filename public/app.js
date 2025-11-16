@@ -2546,16 +2546,17 @@ async attemptDownload(url, originalName = '') {
     }
 
     getFileIcon(mimeType) {
-        if (!mimeType) return '📎';
-        if (mimeType.startsWith('image/')) return '🖼️';
-        if (mimeType.startsWith('audio/')) return '🎵';
-        if (mimeType.startsWith('video/')) return '🎥';
-        if (mimeType.includes('pdf')) return '📄';
-        if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
-        if (mimeType.includes('spreadsheet') or mimeType.includes('excel')) return '📊';
-        if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
-        return '📎';
-    }
+    if (!mimeType) return '📎';
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType.startsWith('audio/')) return '🎵';
+    if (mimeType.startsWith('video/')) return '🎥';
+    if (mimeType.includes('pdf')) return '📄';
+    if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
+    return '📎';
+}
+
 
     async sendMessage() {
         const input = document.getElementById('messageInput');
