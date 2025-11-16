@@ -228,6 +228,30 @@ class STalk {
                 }
             });
         }
+
+        // Visibility handling: attempt to keep socket healthy and re-sync on visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // Reconnect or re-emit join in case iOS suspended the socket in background
+                if (this.socket && this.socket.connected) {
+                    this.socket.emit('join_user_room', this.currentUser?.id);
+                } else {
+                    // try to re-establish socket if it was lost
+                    try {
+                        if (!this.socket || !this.socket.connected) {
+                            this.connectSocket();
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+                // refresh messages for selected chat to avoid disappearing messages
+                if (this.selectedUserId) {
+                    this.loadMessages(this.selectedUserId).catch(()=>{});
+                }
+            } else {
+                // When hidden, optionally mark last seen or let server handle presence
+                // Do nothing else; rely on push for background notifications.
+            }
+        });
     }
 
     // Theme Management
@@ -2528,7 +2552,7 @@ async attemptDownload(url, originalName = '') {
         if (mimeType.startsWith('video/')) return '🎥';
         if (mimeType.includes('pdf')) return '📄';
         if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
-        if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+        if (mimeType.includes('spreadsheet') or mimeType.includes('excel')) return '📊';
         if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
         return '📎';
     }
