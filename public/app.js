@@ -1,11 +1,4 @@
-/* app.js - Full STalk class (complete file)
-   Replaces existing app.js; includes fixes:
-   - Accessible close button + Escape-to-close
-   - Focus management when opening overlays
-   - Swipe-down to close on touch devices
-   - Proper listener cleanup
-*/
-
+// sTalk - Enhanced App with Media Previews, Link Previews, Unread Counters + Push/Sound controls
 class STalk {
     constructor() {
         this.API_BASE = window.location.origin + '/api';
@@ -31,19 +24,10 @@ class STalk {
             this.soundEnabled = this.soundEnabled === 'true';
         }
 
-        // Zoom configuration
-        this.mediaZoomConfig = {
-            maxScale: 4,
-            doubleTapScale: 2.2,
-            animationDuration: 200 // ms
-        };
-
         this.initializeApp();
         this.setupEventListeners();
         this.applyTheme(this.currentTheme);
     }
-
-    /* ----------------- Initialization & existing methods unchanged ----------------- */
 
     async initializeApp() {
         this.showLoading();
@@ -1650,13 +1634,7 @@ class STalk {
             const isSent = message.sender === this.currentUser.username;
 
             let messageContent = '';
-            if (message.messageType === 'file' && (message.filePath || (message.fileInfo && message.fileInfo.path))) {
-                // normalize file path/name/type - support both message.file* and message.fileInfo.*
-                message._filePath = message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
-                message._fileName = message.fileName || (message.fileInfo && (message.fileInfo.originalName || message.fileInfo.fileName)) || 'file';
-                message._fileType = message.fileType || (message.fileInfo && (message.fileInfo.mimeType || message.fileInfo.fileType)) || '';
-                // support thumbnailPath if provided by server
-                message._thumbnailPath = message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
+            if (message.messageType === 'file' && message.filePath) {
                 messageContent = this.renderEnhancedMediaMessage(message);
             } else {
                 messageContent = this.renderEnhancedTextMessage(message.content || '');
@@ -1674,36 +1652,20 @@ class STalk {
 
         container.innerHTML = messagesHTML;
         this.scrollToBottom();
-
-        // helper to avoid repeating code in the top map
-        function filePathFromFileInfo(fi) {
-            return fi.path || fi.filePath || '';
-        }
     }
 
     // NEW: Enhanced media message rendering with previews
     renderEnhancedMediaMessage(message) {
-        const fileName = message._fileName || message.fileName || message.fileInfo?.originalName || 'Unknown file';
-        const fileSize = this.formatFileSize(message.fileSize || (message.fileInfo && message.fileInfo.size) || 0);
-        const filePath = message._filePath || message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
-        const mimeType = (message._fileType || message.fileType || (message.fileInfo && message.fileInfo.mimeType) || '').toLowerCase();
-        const thumbnail = message._thumbnailPath || message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
+        const fileName = message.fileName || 'Unknown file';
+        const fileSize = this.formatFileSize(message.fileSize || 0);
+        const filePath = message.filePath;
+        const mimeType = message.fileType || '';
 
-        // Helper consistent across function
-        function filePathFromFileInfo(fi) {
-            return fi.path || fi.filePath || '';
-        }
-
-        // Image preview - use thumbnail for src if available, keep original in data-original-src
-        if (mimeType.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(fileName)) {
-            const thumbSrc = thumbnail || filePath;
+        // Image preview (auto-download and display)
+        if (mimeType.startsWith('image/')) {
             return `
                 <div class="media-message image-message">
-                    <img src="${thumbSrc}" alt="${this.escapeHtml(fileName)}" class="media-preview"
-                         data-original-src="${filePath}"
-                         data-original-name="${this.escapeHtml(fileName)}"
-                         data-mime="${this.escapeHtml(mimeType)}"
-                         onclick="app.openMediaFullscreenFromElement(this)">
+                    <img src="${filePath}" alt="${fileName}" class="media-preview" onclick="app.openMediaFullscreen('${filePath}', '${fileName}')">
                     <div class="media-info">
                         <div class="media-name">${this.escapeHtml(fileName)}</div>
                         <div class="media-size">${fileSize}</div>
@@ -1712,15 +1674,12 @@ class STalk {
             `;
         }
 
-        // Video preview with thumbnail/poster if available
-        if (mimeType.startsWith('video/') || /\.(mp4|webm|mov|mkv|ogg|ogv)$/i.test(fileName)) {
-            const posterAttr = thumbnail ? `poster="${thumbnail}"` : '';
+        // Video preview with thumbnail and play button
+        if (mimeType.startsWith('video/')) {
             return `
                 <div class="media-message video-message">
-                    <div class="video-preview" onclick="app.playVideoFromElement(this)">
-                        <video preload="metadata" class="video-thumbnail" ${posterAttr}
-                            data-original-src="${filePath}"
-                            data-original-name="${this.escapeHtml(fileName)}">
+                    <div class="video-preview" onclick="app.playVideo('${filePath}')">
+                        <video preload="metadata" class="video-thumbnail">
                             <source src="${filePath}" type="${mimeType}">
                         </video>
                         <div class="play-button">▶️</div>
@@ -1734,7 +1693,7 @@ class STalk {
         }
 
         // Audio preview
-        if (mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|m4a)$/i.test(fileName)) {
+        if (mimeType.startsWith('audio/')) {
             return `
                 <div class="media-message audio-message">
                     <div class="audio-controls">
@@ -1760,7 +1719,7 @@ class STalk {
                     <div class="file-name">${this.escapeHtml(fileName)}</div>
                     <div class="file-size">${fileSize}</div>
                 </div>
-                <a href="${filePath}" download="${this.escapeHtml(fileName)}" class="file-download" title="Download ${this.escapeHtml(fileName)}" rel="noopener noreferrer" target="_blank">
+                <a href="${filePath}" download="${fileName}" class="file-download" title="Download ${fileName}">
                     ⬇️
                 </a>
             </div>
@@ -1816,713 +1775,51 @@ class STalk {
         `;
     }
 
-    /* ------------------ NEW: Media interaction methods with zoom/download ------------------ */
-
-    // Called from onclick attribute on images
-    openMediaFullscreenFromElement(imgEl) {
-        const src = imgEl.dataset.originalSrc || imgEl.src || imgEl.getAttribute('src');
-        const title = imgEl.dataset.originalName || imgEl.alt || '';
-        const mime = imgEl.dataset.mime || '';
-        this.openMediaFullscreen(src, title, { mime, originalName: imgEl.dataset.originalName || '' });
-    }
-
-    // Called from onclick on .video-preview wrapper
-    playVideoFromElement(wrapperEl) {
-        // find video element
-        const video = wrapperEl.querySelector('video');
-        const src = video?.dataset.originalSrc || video?.querySelector('source')?.src || video?.src;
-        const title = video?.dataset.originalName || (wrapperEl.dataset && wrapperEl.dataset.originalName) || '';
-        const originalName = video?.dataset.originalName || this.extractFileNameFromUrl(src);
-        this.playVideo(src, { title, originalName });
-    }
-
-    // core full-screen image viewer (image)
-    openMediaFullscreen(src, title = '', opts = {}) {
-        if (!src) return;
-
-        // Build overlay elements
+    // NEW: Media interaction methods
+    openMediaFullscreen(src, title) {
+        // Create fullscreen overlay
         const overlay = document.createElement('div');
         overlay.className = 'media-fullscreen-overlay';
-        overlay.style.opacity = 0;
-        overlay.style.transition = `opacity ${this.mediaZoomConfig.animationDuration}ms ease`;
-        overlay.style.position = 'fixed';
-        overlay.style.inset = '0';
-        overlay.style.zIndex = 6000;
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.background = 'rgba(0,0,0,0.88)';
-        overlay.style.padding = '20px';
+        overlay.innerHTML = `
+            <div class="media-fullscreen-content">
+                <button class="media-fullscreen-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+                <img src="${src}" alt="${title}" class="media-fullscreen-image">
+                <div class="media-fullscreen-title">${this.escapeHtml(title)}</div>
+            </div>
+        `;
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'media-fullscreen-content';
-        wrapper.style.maxWidth = '98%';
-        wrapper.style.maxHeight = '98%';
-        wrapper.style.position = 'relative';
-        wrapper.style.display = 'flex';
-        wrapper.style.alignItems = 'center';
-        wrapper.style.justifyContent = 'center';
-        wrapper.style.flexDirection = 'column';
-        wrapper.style.gap = '8px';
-        wrapper.tabIndex = -1;
-
-        // container for image that will get transforms
-        const imgContainer = document.createElement('div');
-        imgContainer.style.position = 'relative';
-        imgContainer.style.touchAction = 'none';
-        imgContainer.style.maxWidth = '100%';
-        imgContainer.style.maxHeight = '100%';
-        imgContainer.style.display = 'flex';
-        imgContainer.style.alignItems = 'center';
-        imgContainer.style.justifyContent = 'center';
-        imgContainer.style.overflow = 'hidden';
-
-        const image = document.createElement('img');
-        image.className = 'media-fullscreen-image';
-        image.src = src;
-        image.alt = title || '';
-        image.style.transition = `transform ${this.mediaZoomConfig.animationDuration}ms ease`;
-        image.style.transformOrigin = 'center center';
-        image.style.maxWidth = '100%';
-        image.style.maxHeight = '100%';
-        image.style.userSelect = 'none';
-        image.style.webkitUserDrag = 'none';
-        image.style.display = 'block';
-
-        imgContainer.appendChild(image);
-        wrapper.appendChild(imgContainer);
-
-        // title (below)
-        if (title) {
-            const titleEl = document.createElement('div');
-            titleEl.className = 'media-fullscreen-title';
-            titleEl.textContent = title;
-            titleEl.style.color = '#fff';
-            titleEl.style.opacity = '0.95';
-            titleEl.style.fontSize = '0.95rem';
-            titleEl.style.textAlign = 'center';
-            titleEl.style.wordBreak = 'break-word';
-            titleEl.style.maxWidth = '90%';
-            wrapper.appendChild(titleEl);
-        }
-
-        // bottom action bar (option 2 - bottom bar)
-        const actionBar = document.createElement('div');
-        actionBar.style.position = 'absolute';
-        actionBar.style.left = '0';
-        actionBar.style.right = '0';
-        actionBar.style.bottom = '0';
-        actionBar.style.padding = '10px 12px';
-        actionBar.style.display = 'flex';
-        actionBar.style.justifyContent = 'space-between';
-        actionBar.style.alignItems = 'center';
-        actionBar.style.gap = '8px';
-        actionBar.style.background = 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)';
-        actionBar.style.zIndex = 20;
-
-        // left: spacer / filename
-        const leftInfo = document.createElement('div');
-        leftInfo.style.color = '#fff';
-        leftInfo.style.fontSize = '0.95rem';
-        leftInfo.style.maxWidth = '70%';
-        leftInfo.style.overflow = 'hidden';
-        leftInfo.style.textOverflow = 'ellipsis';
-        leftInfo.style.whiteSpace = 'nowrap';
-        leftInfo.textContent = title || '';
-
-        // center: download button
-        const centerActions = document.createElement('div');
-        centerActions.style.display = 'flex';
-        centerActions.style.gap = '8px';
-
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'btn-secondary';
-        downloadBtn.style.background = 'rgba(255,255,255,0.08)';
-        downloadBtn.style.border = '1px solid rgba(255,255,255,0.12)';
-        downloadBtn.style.color = '#fff';
-        downloadBtn.style.padding = '8px 10px';
-        downloadBtn.style.borderRadius = '10px';
-        downloadBtn.style.fontSize = '0.95rem';
-        downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            this.attemptDownload(src, opts.originalName || title || this.extractFileNameFromUrl(src));
-        });
-
-        const openBtn = document.createElement('button');
-        openBtn.className = 'btn-secondary';
-        openBtn.style.background = 'rgba(255,255,255,0.08)';
-        openBtn.style.border = '1px solid rgba(255,255,255,0.12)';
-        openBtn.style.color = '#fff';
-        openBtn.style.padding = '8px 10px';
-        openBtn.style.borderRadius = '10px';
-        openBtn.style.fontSize = '0.95rem';
-        openBtn.textContent = '🔗 Open';
-        openBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            window.open(src, '_blank', 'noopener');
-        });
-
-        centerActions.appendChild(downloadBtn);
-        centerActions.appendChild(openBtn);
-
-        // RIGHT: accessible close button
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'media-fullscreen-close';
-        closeBtn.type = 'button';
-        closeBtn.setAttribute('aria-label', 'Close viewer');
-        closeBtn.tabIndex = 0;
-        closeBtn.innerHTML = '✕';
-        closeBtn.style.background = 'rgba(0,0,0,0.6)';
-        closeBtn.style.border = 'none';
-        closeBtn.style.color = '#fff';
-        closeBtn.style.padding = '10px 12px';
-        closeBtn.style.borderRadius = '8px';
-        closeBtn.style.fontSize = '18px';
-        closeBtn.style.cursor = 'pointer';
-
-        closeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeOverlay();
-        });
-        closeBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                closeOverlay();
-            }
-        });
-
-        actionBar.appendChild(leftInfo);
-        actionBar.appendChild(centerActions);
-        actionBar.appendChild(closeBtn);
-
-        wrapper.appendChild(actionBar);
-
-        overlay.appendChild(wrapper);
-        document.body.appendChild(overlay);
-
-        // animate in
-        requestAnimationFrame(() => {
-            overlay.style.opacity = 1;
-        });
-
-        // Setup zoom/pan handlers
-        const gestureState = {
-            scale: 1,
-            lastScale: 1,
-            startDist: 0,
-            originX: 0,
-            originY: 0,
-            panX: 0,
-            panY: 0,
-            lastPanX: 0,
-            lastPanY: 0,
-            doubleTapLast: 0,
-            startX: 0,
-            startY: 0,
-            isMouseDown: false
-        };
-
-        const maxScale = this.mediaZoomConfig.maxScale;
-        const doubleTapScale = this.mediaZoomConfig.doubleTapScale;
-
-        // Utilities to apply transform
-        const applyTransform = () => {
-            image.style.transform = `translate(${gestureState.panX}px, ${gestureState.panY}px) scale(${gestureState.scale})`;
-        };
-
-        // Clamp helper
-        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-        // Touch helpers
-        function getDistance(touches) {
-            const dx = touches[0].clientX - touches[1].clientX;
-            const dy = touches[0].clientY - touches[1].clientY;
-            return Math.sqrt(dx*dx + dy*dy);
-        }
-
-        // Convert a client point to image-space origin relative values (not perfect but good)
-        function calculateOrigin(clientX, clientY) {
-            const rect = image.getBoundingClientRect();
-            const ox = (clientX - rect.left) / rect.width;
-            const oy = (clientY - rect.top) / rect.height;
-            return { ox, oy };
-        }
-
-        // Pointer / Touch event handlers
-        const onTouchStart = (e) => {
-            if (e.touches && e.touches.length === 2) {
-                e.preventDefault();
-                gestureState.startDist = getDistance(e.touches);
-                gestureState.lastScale = gestureState.scale;
-                // origin for scale
-                const origin = calculateOrigin((e.touches[0].clientX + e.touches[1].clientX)/2, (e.touches[0].clientY + e.touches[1].clientY)/2);
-                gestureState.originX = origin.ox;
-                gestureState.originY = origin.oy;
-            } else if (e.touches && e.touches.length === 1) {
-                // single touch - pan start
-                gestureState.lastPanX = gestureState.panX;
-                gestureState.lastPanY = gestureState.panY;
-                gestureState.startX = e.touches[0].clientX;
-                gestureState.startY = e.touches[0].clientY;
-            }
-        };
-
-        const onTouchMove = (e) => {
-            if (e.touches && e.touches.length === 2) {
-                e.preventDefault();
-                const curDist = getDistance(e.touches);
-                const scaleFactor = curDist / (gestureState.startDist || curDist);
-                let newScale = gestureState.lastScale * scaleFactor;
-                newScale = clamp(newScale, 1, maxScale);
-                gestureState.scale = newScale;
-                applyTransform();
-            } else if (e.touches && e.touches.length === 1) {
-                if (gestureState.scale > 1) {
-                    e.preventDefault();
-                    const dx = e.touches[0].clientX - gestureState.startX;
-                    const dy = e.touches[0].clientY - gestureState.startY;
-                    gestureState.panX = gestureState.lastPanX + dx;
-                    gestureState.panY = gestureState.lastPanY + dy;
-                    applyTransform();
-                }
-            }
-        };
-
-        const onTouchEnd = (e) => {
-            // if ended and scale < 1 reset
-            if (!e.touches || e.touches.length === 0) {
-                gestureState.lastScale = gestureState.scale;
-                gestureState.lastPanX = gestureState.panX;
-                gestureState.lastPanY = gestureState.panY;
-
-                if (gestureState.scale === 1) {
-                    gestureState.panX = 0;
-                    gestureState.panY = 0;
-                    gestureState.lastPanX = 0;
-                    gestureState.lastPanY = 0;
-                    applyTransform();
-                } else {
-                    // clamp panning roughly so image doesn't slide too far
-                    const rect = image.getBoundingClientRect();
-                    const viewportW = window.innerWidth;
-                    const viewportH = window.innerHeight;
-                    const maxPanX = Math.max(0, (rect.width - viewportW)/2 + 20);
-                    const maxPanY = Math.max(0, (rect.height - viewportH)/2 + 20);
-                    gestureState.panX = clamp(gestureState.panX, -maxPanX, maxPanX);
-                    gestureState.panY = clamp(gestureState.panY, -maxPanY, maxPanY);
-                    gestureState.lastPanX = gestureState.panX;
-                    gestureState.lastPanY = gestureState.panY;
-                    applyTransform();
-                }
-            }
-        };
-
-        // Double-tap to zoom
-        const onDoubleTap = (ev) => {
-            const now = Date.now();
-            if (now - gestureState.doubleTapLast < 300) {
-                // double tap detected
-                if (gestureState.scale > 1.05) {
-                    // reset
-                    gestureState.scale = 1;
-                    gestureState.panX = 0;
-                    gestureState.panY = 0;
-                    gestureState.lastPanX = 0;
-                    gestureState.lastPanY = 0;
-                } else {
-                    // zoom into doubleTapScale centered at tap location
-                    const rect = image.getBoundingClientRect();
-                    const clickX = ev.clientX || (ev.touches && ev.touches[0].clientX);
-                    const clickY = ev.clientY || (ev.touches && ev.touches[0].clientY);
-                    const offsetX = clickX - rect.left - rect.width/2;
-                    const offsetY = clickY - rect.top - rect.height/2;
-                    gestureState.scale = doubleTapScale;
-                    // simple pan so clicked point moves towards center (approx)
-                    gestureState.panX = -offsetX * (gestureState.scale - 1);
-                    gestureState.panY = -offsetY * (gestureState.scale - 1);
-                }
-                applyTransform();
-            }
-            gestureState.doubleTapLast = now;
-        };
-
-        // Mouse wheel zoom for desktop
-        const onWheel = (ev) => {
-            if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // avoid interfering with browser zoom shortcuts
-            ev.preventDefault();
-            const delta = ev.deltaY;
-            const scaleChange = delta > 0 ? 0.9 : 1.1;
-            let newScale = gestureState.scale * scaleChange;
-            newScale = clamp(newScale, 1, maxScale);
-            gestureState.scale = newScale;
-            applyTransform();
-        };
-
-        // Mouse drag panning for desktop
-        const onMouseDown = (ev) => {
-            if (ev.button !== 0) return;
-            gestureState.isMouseDown = true;
-            gestureState.startX = ev.clientX;
-            gestureState.startY = ev.clientY;
-            gestureState.lastPanX = gestureState.panX;
-            gestureState.lastPanY = gestureState.panY;
-            ev.preventDefault();
-        };
-
-        const onMouseMove = (ev) => {
-            if (!gestureState.isMouseDown) return;
-            if (gestureState.scale > 1) {
-                const dx = ev.clientX - gestureState.startX;
-                const dy = ev.clientY - gestureState.startY;
-                gestureState.panX = gestureState.lastPanX + dx;
-                gestureState.panY = gestureState.lastPanY + dy;
-                applyTransform();
-            }
-        };
-
-        const onMouseUp = (ev) => {
-            if (gestureState.isMouseDown) {
-                gestureState.isMouseDown = false;
-                gestureState.lastPanX = gestureState.panX;
-                gestureState.lastPanY = gestureState.panY;
-            }
-        };
-
-        // Add listeners
-        image.addEventListener('touchstart', onTouchStart, { passive: false });
-        image.addEventListener('touchmove', onTouchMove, { passive: false });
-        image.addEventListener('touchend', onTouchEnd, { passive: false });
-        image.addEventListener('click', (ev) => {
-            // single click should not close; close if clicked outside image container is handled below
-            ev.stopPropagation();
-        });
-
-        // double-tap detection on container
-        imgContainer.addEventListener('touchend', onDoubleTap, { passive: true });
-        // mouse double click
-        imgContainer.addEventListener('dblclick', (ev) => {
-            onDoubleTap(ev);
-        });
-
-        // wheel zoom
-        imgContainer.addEventListener('wheel', onWheel, { passive: false });
-
-        // mouse drag
-        imgContainer.addEventListener('mousedown', onMouseDown, { passive: false });
-        window.addEventListener('mousemove', onMouseMove, { passive: false });
-        window.addEventListener('mouseup', onMouseUp, { passive: false });
-
-        // close overlay when clicking outside content
-        overlay.addEventListener('click', (ev) => {
-            if (ev.target === overlay) closeOverlay();
-        });
-
-        // cleanup function (with keyboard & touch closing)
-        const onKey = (e) => {
-            if (e.key === 'Escape') closeOverlay();
-        };
-        window.addEventListener('keydown', onKey);
-
-        // swipe-down to close
-        let touchStartY = null;
-        const onSwipeStart = (ev) => {
-            if (ev.touches && ev.touches.length === 1) touchStartY = ev.touches[0].clientY;
-        };
-        const onSwipeMove = (ev) => {
-            if (!touchStartY) return;
-            const curY = ev.touches[0].clientY;
-            const delta = curY - touchStartY;
-            if (delta > 80) {
-                closeOverlay();
-                touchStartY = null;
-            }
-        };
-        imgContainer.addEventListener('touchstart', onSwipeStart, { passive: true });
-        imgContainer.addEventListener('touchmove', onSwipeMove, { passive: true });
-
-        // close btn action already wired above
-
-        // close overlay function
-        const closeOverlay = () => {
-            overlay.style.opacity = 0;
-            setTimeout(() => {
-                // remove listeners & element
-                try {
-                    image.removeEventListener('touchstart', onTouchStart);
-                    image.removeEventListener('touchmove', onTouchMove);
-                    image.removeEventListener('touchend', onTouchEnd);
-                    imgContainer.removeEventListener('touchend', onDoubleTap);
-                    imgContainer.removeEventListener('dblclick', onDoubleTap);
-                    imgContainer.removeEventListener('wheel', onWheel);
-                    imgContainer.removeEventListener('mousedown', onMouseDown);
-                    window.removeEventListener('mousemove', onMouseMove);
-                    window.removeEventListener('mouseup', onMouseUp);
-                    window.removeEventListener('keydown', onKey);
-                    imgContainer.removeEventListener('touchstart', onSwipeStart);
-                    imgContainer.removeEventListener('touchmove', onSwipeMove);
-                } catch (e) { /* ignore */ }
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
                 overlay.remove();
-            }, this.mediaZoomConfig.animationDuration + 20);
-        };
+            }
+        });
 
-        // ensure focus
-        setTimeout(() => {
-            image.focus && image.focus();
-            // focus close button for accessibility
-            closeBtn.focus && closeBtn.focus();
-        }, 50);
+        document.body.appendChild(overlay);
     }
 
-    // core full-screen video player (with same bottom actions)
-    playVideo(src, opts = {}) {
-        if (!src) return;
-
+    playVideo(src) {
+        // Create video player overlay
         const overlay = document.createElement('div');
         overlay.className = 'media-fullscreen-overlay';
-        overlay.style.opacity = 0;
-        overlay.style.transition = `opacity ${this.mediaZoomConfig.animationDuration}ms ease`;
-        overlay.style.position = 'fixed';
-        overlay.style.inset = '0';
-        overlay.style.zIndex = 6000;
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.background = 'rgba(0,0,0,0.88)';
-        overlay.style.padding = '20px';
+        overlay.innerHTML = `
+            <div class="media-fullscreen-content">
+                <button class="media-fullscreen-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+                <video controls autoplay class="media-fullscreen-video">
+                    <source src="${src}">
+                </video>
+            </div>
+        `;
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'media-fullscreen-content';
-        wrapper.style.maxWidth = '98%';
-        wrapper.style.maxHeight = '98%';
-        wrapper.style.position = 'relative';
-        wrapper.style.display = 'flex';
-        wrapper.style.alignItems = 'center';
-        wrapper.style.justifyContent = 'center';
-        wrapper.style.flexDirection = 'column';
-        wrapper.style.gap = '8px';
-        wrapper.tabIndex = -1;
-
-        const video = document.createElement('video');
-        video.className = 'media-fullscreen-video';
-        video.controls = true;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.style.maxWidth = '100%';
-        video.style.maxHeight = '100%';
-        video.style.borderRadius = '8px';
-        video.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
-        video.style.background = '#000';
-
-        const source = document.createElement('source');
-        source.src = src;
-        video.appendChild(source);
-
-        wrapper.appendChild(video);
-
-        if (opts.title) {
-            const titleEl = document.createElement('div');
-            titleEl.className = 'media-fullscreen-title';
-            titleEl.textContent = opts.title;
-            titleEl.style.color = '#fff';
-            wrapper.appendChild(titleEl);
-        }
-
-        // bottom action bar same as image one
-        const actionBar = document.createElement('div');
-        actionBar.style.position = 'absolute';
-        actionBar.style.left = '0';
-        actionBar.style.right = '0';
-        actionBar.style.bottom = '0';
-        actionBar.style.padding = '10px 12px';
-        actionBar.style.display = 'flex';
-        actionBar.style.justifyContent = 'space-between';
-        actionBar.style.alignItems = 'center';
-        actionBar.style.gap = '8px';
-        actionBar.style.background = 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)';
-        actionBar.style.zIndex = 20;
-
-        const leftInfo = document.createElement('div');
-        leftInfo.style.color = '#fff';
-        leftInfo.style.fontSize = '0.95rem';
-        leftInfo.textContent = opts.title || '';
-
-        const centerActions = document.createElement('div');
-        centerActions.style.display = 'flex';
-        centerActions.style.gap = '8px';
-
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'btn-secondary';
-        downloadBtn.style.background = 'rgba(255,255,255,0.08)';
-        downloadBtn.style.border = '1px solid rgba(255,255,255,0.12)';
-        downloadBtn.style.color = '#fff';
-        downloadBtn.style.padding = '8px 10px';
-        downloadBtn.style.borderRadius = '10px';
-        downloadBtn.style.fontSize = '0.95rem';
-        downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            this.attemptDownload(src, opts.originalName || this.extractFileNameFromUrl(src));
-        });
-
-        const openBtn = document.createElement('button');
-        openBtn.className = 'btn-secondary';
-        openBtn.style.background = 'rgba(255,255,255,0.08)';
-        openBtn.style.border = '1px solid rgba(255,255,255,0.12)';
-        openBtn.style.color = '#fff';
-        openBtn.style.padding = '8px 10px';
-        openBtn.style.borderRadius = '10px';
-        openBtn.style.fontSize = '0.95rem';
-        openBtn.textContent = '🔗 Open';
-        openBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            window.open(src, '_blank', 'noopener');
-        });
-
-        centerActions.appendChild(downloadBtn);
-        centerActions.appendChild(openBtn);
-
-        // close btn (accessible)
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'media-fullscreen-close';
-        closeBtn.type = 'button';
-        closeBtn.setAttribute('aria-label', 'Close video viewer');
-        closeBtn.tabIndex = 0;
-        closeBtn.innerHTML = '✕';
-        closeBtn.style.background = 'rgba(0,0,0,0.6)';
-        closeBtn.style.border = 'none';
-        closeBtn.style.color = '#fff';
-        closeBtn.style.padding = '10px 12px';
-        closeBtn.style.borderRadius = '8px';
-        closeBtn.style.fontSize = '18px';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeOverlay(); });
-        closeBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeOverlay(); }
-        });
-
-        actionBar.appendChild(leftInfo);
-        actionBar.appendChild(centerActions);
-        actionBar.appendChild(closeBtn);
-
-        wrapper.appendChild(actionBar);
-
-        overlay.appendChild(wrapper);
-        document.body.appendChild(overlay);
-
-        // animate in
-        requestAnimationFrame(() => {
-            overlay.style.opacity = 1;
-        });
-
-        // keyboard to close
-        const onKey = (e) => { if (e.key === 'Escape') closeOverlay(); };
-        window.addEventListener('keydown', onKey);
-
-        // close on outside click
-        overlay.addEventListener('click', (ev) => {
-            if (ev.target === overlay) closeOverlay();
-        });
-
-        function closeOverlay() {
-            overlay.style.opacity = 0;
-            try { video.pause(); } catch (e) {}
-            try {
-                window.removeEventListener('keydown', onKey);
-            } catch (e) {}
-            setTimeout(() => {
-                try { overlay.remove(); } catch (e) {}
-            }, 250);
-        }
-
-        // ensure focusable & ready
-        setTimeout(() => {
-            closeBtn.focus && closeBtn.focus();
-        }, 50);
-    }
-
-    // attempt to download file; falls back to open-in-new-tab if download rejected (CORS)
-   // attempt to download/share a file; prefers native share sheet, falls back to anchor download or open-in-new-tab
-async attemptDownload(url, originalName = '') {
-    if (!url) return;
-    const filename = this.generateDownloadFilename(originalName || this.extractFileNameFromUrl(url));
-
-    // helper to open in new tab fallback
-    const openInNewTab = (u) => {
-        // open without download attribute (last resort)
-        window.open(u, '_blank', 'noopener');
-    };
-
-    try {
-        // Try to fetch the file as a blob first (CORS required)
-        const resp = await fetch(url, { mode: 'cors' });
-        if (!resp.ok) throw new Error('Fetch failed');
-
-        const blob = await resp.blob();
-
-        // If Web Share API with files supported, use it — shows native share sheet including "Save Image".
-        try {
-            const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
-
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: filename,
-                    text: ''
-                });
-                return;
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
             }
-        } catch (shareErr) {
-            // share may throw on some browsers; we'll fall back to anchor download below
-            console.warn('Web Share with files failed:', shareErr);
-        }
+        });
 
-        // Fallback: create object URL and trigger an anchor download (works in many browsers)
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        a.rel = 'noopener';
-        // do NOT set target='_blank' for the download anchor; clicking should trigger save dialog
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        // revoke object URL after a small delay
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 60 * 1000);
-        return;
-    } catch (errFetch) {
-        console.warn('Fetch/download failed or blocked (CORS?)', errFetch);
-        // If fetch failed (often due to CORS), fallback to opening direct URL in new tab/window
-        openInNewTab(url);
-    }
-}
-
-
-    // helper: generate filename with prefix to avoid duplicates
-    generateDownloadFilename(originalName) {
-        const now = new Date();
-        const pad = (n) => n.toString().padStart(2, '0');
-        const datePart = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        const safeName = (originalName || 'file').replace(/[<>:"/\\|?*]+/g, '_');
-        return `sTalk-${datePart}-${safeName}`;
-    }
-
-    extractFileNameFromUrl(url) {
-        try {
-            const u = new URL(url, window.location.origin);
-            const pathname = u.pathname;
-            const idx = pathname.lastIndexOf('/');
-            return idx >= 0 ? pathname.slice(idx+1) : pathname || 'file';
-        } catch (e) {
-            // fallback
-            const parts = url.split('/');
-            return parts[parts.length-1] || 'file';
-        }
+        document.body.appendChild(overlay);
     }
 
     getFileIcon(mimeType) {
-        if (!mimeType) return '📎';
         if (mimeType.startsWith('image/')) return '🖼️';
         if (mimeType.startsWith('audio/')) return '🎵';
         if (mimeType.startsWith('video/')) return '🎥';
@@ -2589,12 +1886,7 @@ async attemptDownload(url, originalName = '') {
         messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
         let messageContent = '';
-        if (message.messageType === 'file' && (message.filePath || (message.fileInfo && message.fileInfo.path))) {
-            // normalize for consistent rendering
-            message._filePath = message.filePath || (message.fileInfo && filePathFromFileInfo(message.fileInfo)) || '';
-            message._fileName = message.fileName || (message.fileInfo && (message.fileInfo.originalName || message.fileInfo.fileName)) || 'file';
-            message._fileType = message.fileType || (message.fileInfo && (message.fileInfo.mimeType || message.fileInfo.fileType)) || '';
-            message._thumbnailPath = message.thumbnailPath || (message.fileInfo && message.fileInfo.thumbnailPath) || '';
+        if (message.messageType === 'file' && message.filePath) {
             messageContent = this.renderEnhancedMediaMessage(message);
         } else {
             messageContent = this.renderEnhancedTextMessage(message.content || '');
@@ -2611,10 +1903,6 @@ async attemptDownload(url, originalName = '') {
 
         if (scroll) {
             this.scrollToBottom();
-        }
-
-        function filePathFromFileInfo(fi) {
-            return fi.path || fi.filePath || '';
         }
     }
 

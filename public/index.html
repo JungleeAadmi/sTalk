@@ -14,7 +14,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <style>
-        /* ---------- (existing styles kept intact) ---------- */
         * {
             margin: 0;
             padding: 0;
@@ -25,10 +24,6 @@
             --primary-color: #3b82f6;
             --primary-dark: #2563eb;
             --primary-light: #60a5fa;
-
-            /* Safe area & header height variables (runtime-updated by JS for better cross-browser behavior) */
-            --safe-top: env(safe-area-inset-top, 0px);
-            --header-height: 60px;
         }
 
         /* Light Theme */
@@ -266,8 +261,6 @@
             box-shadow: var(--shadow);
             z-index: 100;
             min-height: 60px;
-            /* account for notch / safe area with extra padding-top */
-            padding-top: calc(1rem + var(--safe-top));
         }
 
         .app-title {
@@ -788,6 +781,22 @@
             text-align: left;
         }
 
+        /* FIX: Ensure images sent in chat never exceed bubble width (prevents full-resolution overflowing) */
+        .message-bubble img,
+        .media-preview,
+        .media-message img,
+        .video-thumbnail,
+        .media-fullscreen-image,
+        .media-fullscreen-video {
+            max-width: 100%;
+            width: auto;
+            height: auto;
+            max-height: 320px; /* reasonable cap inside bubble; adjust if you want smaller */
+            border-radius: 12px;
+            object-fit: cover;
+            display: block;
+        }
+
         /* many other styles kept as-is (media messages, file previews, etc.) */
         /* ... (omitted here for brevity in commentary, but in file everything remains intact) */
 
@@ -1186,8 +1195,8 @@
 
             /* Container below header */
             .chat-container {
-                margin-top: var(--header-height, 60px);
-                height: calc(100vh - var(--header-height, 60px));
+                margin-top: 60px;
+                height: calc(100vh - 60px);
                 display: flex;
                 overflow: hidden;
             }
@@ -1224,10 +1233,10 @@
                 background: var(--background);
             }
 
-            /* Chat header replaces app header position (fixed on mobile detail view) */
+            /* Chat header replaces app header position */
             .chat-header {
                 flex-shrink: 0;
-                min-height: var(--header-height, 60px);
+                min-height: 60px;
                 background: var(--primary-color);
                 color: white;
                 display: flex;
@@ -1236,10 +1245,8 @@
                 padding: 1rem;
                 z-index: 100;
                 border-bottom: none;
-                position: fixed;
+                position: sticky;
                 top: 0;
-                left: 0;
-                right: 0;
             }
 
             .chat-header .back-btn {
@@ -1273,8 +1280,7 @@
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
                 background: var(--surface-variant);
-                /* ensure messages start below the fixed header on mobile detail */
-                padding-top: calc(var(--header-height, 60px) + 8px);
+                max-height: calc(100vh - 60px - 80px);
                 min-height: 200px;
                 padding-bottom: 90px; /* leave space for input */
             }
@@ -1303,7 +1309,9 @@
 
         /* Mobile fixes (extra safety block for very small viewports) */
         @media (max-width: 768px) {
+            body {
                 /* allow body scroll (do not lock) */
+            }
 
             .app {
                 height: 100vh;
@@ -1429,128 +1437,6 @@
             font-size: 0.8rem;
             color: var(--text-secondary);
             margin-top: 0.5rem;
-        }
-
-        /* ---------- New / adjusted styles for thumbnails and lightbox ---------- */
-
-        /* Constrain images and video thumbnails inside message bubbles */
-        .media-message,
-        .file-message {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-        }
-
-        /* Thumbnails inside bubbles */
-        .media-preview,
-        .video-thumbnail,
-        .media-message img,
-        .media-message video {
-            display: block;
-            max-width: calc(70%);             /* relative to bubble; keeps messages readable */
-            max-height: 45vh;                 /* prevent very tall images from overflowing the viewport */
-            width: auto;
-            height: auto;
-            border-radius: 12px;
-            object-fit: cover;                /* crops slightly to look nice */
-            cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        /* Slightly smaller thumbnails for sent messages (right side) */
-        .message.sent .media-preview,
-        .message.sent .video-thumbnail {
-            max-width: calc(60%);
-        }
-
-        /* Ensure files (non-media) keep layout */
-        .file-message .file-icon {
-            font-size: 1.6rem;
-            margin-right: 0.5rem;
-        }
-
-        /* Lightbox / fullscreen overlay */
-        .media-fullscreen-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.88);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 6000;
-            padding: 20px;
-        }
-
-        .media-fullscreen-content {
-            max-width: 98%;
-            max-height: 98%;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .media-fullscreen-image,
-        .media-fullscreen-video {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-        }
-
-        .media-fullscreen-close {
-            position: absolute;
-            right: 8px;
-            top: 8px;
-            background: rgba(0,0,0,0.5);
-            color: #fff;
-            border: none;
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
-            z-index: 10;
-        }
-
-        .media-fullscreen-title {
-            color: #fff;
-            font-size: 0.95rem;
-            opacity: 0.95;
-            margin-top: 6px;
-            text-align: center;
-            word-break: break-word;
-            max-width: 90%;
-        }
-
-        /* Make play-button overlay centered on video thumbnail (if used) */
-        .video-preview {
-            position: relative;
-            display: inline-block;
-        }
-        .video-preview .play-button {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 22px;
-            background: rgba(0,0,0,0.45);
-            color: white;
-            padding: 8px 10px;
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        /* On very narrow screens, reduce thumbnail size a bit */
-        @media (max-width: 420px) {
-            .media-preview,
-            .video-thumbnail {
-                max-width: 85%;
-                max-height: 38vh;
-            }
         }
     </style>
     <!-- Favicons & app icons -->
@@ -1857,17 +1743,15 @@
         </div>
     </div>
 
-    <!-- Socket.IO and App Scripts (deferred to ensure DOM is parsed first) -->
-    <script src="/socket.io/socket.io.js" defer></script>
-    <script src="/push-client.js" defer></script>
-    <script src="app.js" defer></script>
-    <!-- Push Notification Client is loaded above (deferred) -->
+    <!-- Socket.IO and App Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+    <!-- Push Notification Client -->
+    <script src="/push-client.js"></script>
 
-    <!-- Small UI helpers already present in your file (keeps header visible, etc.) -->
     <script>
         // small helper to ensure message input is visible when keyboard opens
         (function () {
-            // this helper is safe to keep — it only references DOM during runtime and does not duplicate handlers
             const msgInput = document.getElementById('messageInput');
             if (!msgInput) return;
             msgInput.addEventListener('focus', () => {
@@ -1883,316 +1767,28 @@
             });
         })();
 
-        // Note: settings/open-close wiring happens inside app.js (setupEventListeners).
-        // Removing duplicate wiring here avoids double event listeners and race conditions.
-    </script>
+        // Settings buttons wiring (small helper so push-client can attach after load)
+        document.addEventListener('DOMContentLoaded', () => {
+            // show settings
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsModal = document.getElementById('settingsModal');
+            const closeSettings = document.getElementById('closeSettings');
+            const quickSettings = document.getElementById('quickSettingsItem');
 
-    <!-- ---------- New fallback lightbox handler (keeps your media overlay behavior) ---------- -->
-    <script>
-    (function () {
-        /**
-         * Delegated click handler for media thumbnails.
-         * Preference order:
-         * 1) If app.openMediaFullscreen / app.playVideo exists, call them (your app.js may handle analytics / tracking etc.)
-         * 2) Fallback to a local overlay implementation that displays image/video full-screen.
-         */
+            const showSettings = () => {
+                settingsModal.classList.add('show');
+                settingsModal.setAttribute('aria-hidden', 'false');
+            };
+            const hideSettings = () => {
+                settingsModal.classList.remove('show');
+                settingsModal.setAttribute('aria-hidden', 'true');
+            };
 
-        function createOverlay(contentEl, title) {
-    const overlay = document.createElement('div');
-    overlay.className = 'media-fullscreen-overlay';
-    overlay.innerHTML = ''; // we'll append nodes for better control
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'media-fullscreen-content';
-    wrapper.tabIndex = -1; // allow focus
-
-    // Accessible close button
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'media-fullscreen-close';
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Close viewer');
-    closeBtn.tabIndex = 0;
-    closeBtn.innerHTML = '✕';
-
-    const stopClick = (ev) => ev.stopPropagation();
-    closeBtn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        closeOverlay();
-    });
-    closeBtn.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-            ev.preventDefault();
-            closeOverlay();
-        }
-    });
-    closeBtn.addEventListener('click', stopClick);
-
-    // append nodes
-    wrapper.appendChild(closeBtn);
-    wrapper.appendChild(contentEl);
-
-    if (title) {
-        const t = document.createElement('div');
-        t.className = 'media-fullscreen-title';
-        t.textContent = title;
-        wrapper.appendChild(t);
-    }
-
-    overlay.appendChild(wrapper);
-
-    // close when clicking outside content
-    overlay.addEventListener('click', (ev) => {
-        if (ev.target === overlay) closeOverlay();
-    });
-
-    // keyboard: close on Escape and trap focus (simple)
-    const previouslyFocused = document.activeElement;
-    const onKey = (e) => {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            closeOverlay();
-        } else if (e.key === 'Tab') {
-            // keep tab inside wrapper (basic trap)
-            const focusable = wrapper.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
-            if (!focusable.length) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
-                e.preventDefault();
-                last.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-                e.preventDefault();
-                first.focus();
-            }
-        }
-    };
-    window.addEventListener('keydown', onKey);
-
-    // swipe down on mobile (simple)
-    let touchStartY = null;
-    const onTouchStart = (ev) => {
-        if (ev.touches && ev.touches.length === 1) touchStartY = ev.touches[0].clientY;
-    };
-    const onTouchMove = (ev) => {
-        if (!touchStartY) return;
-        const curY = ev.touches[0].clientY;
-        const delta = curY - touchStartY;
-        if (delta > 80) {
-            closeOverlay();
-            touchStartY = null;
-        }
-    };
-    wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
-    wrapper.addEventListener('touchmove', onTouchMove, { passive: true });
-
-    // append overlay and focus the wrapper (for screen readers / keyboard)
-    document.body.appendChild(overlay);
-    // Wait a tick to allow DOM insertion
-    setTimeout(() => {
-        wrapper.focus();
-        // focus close button for quicker dismissal
-        closeBtn.focus();
-    }, 40);
-
-    // cleanup / close
-    function closeOverlay() {
-        try {
-            window.removeEventListener('keydown', onKey);
-            wrapper.removeEventListener('touchstart', onTouchStart);
-            wrapper.removeEventListener('touchmove', onTouchMove);
-        } catch (e) {}
-        // animate out if you have transitions; here we just remove
-        overlay.remove();
-        try { previouslyFocused && previouslyFocused.focus(); } catch (e) {}
-    }
-
-    return overlay;
-}
-
-
-        // On click delegation
-        document.addEventListener('click', function (ev) {
-            const img = ev.target.closest('.media-preview');
-            const vid = ev.target.closest('.video-thumbnail, .video-preview, .video-thumbnail source, .video-thumbnail video');
-
-            if (img) {
-                const src = img.getAttribute('src') || img.dataset.src;
-                const title = img.getAttribute('alt') || img.dataset.name || '';
-                if (!src) return;
-                // prefer app handler if exists
-                if (window.app && typeof window.app.openMediaFullscreen === 'function') {
-                    try { window.app.openMediaFullscreen(src, title); return; } catch (e) { /* fallthrough */ }
-                }
-
-                // fallback: create overlay with an <img>
-                const content = document.createElement('img');
-                content.className = 'media-fullscreen-image';
-                content.src = src;
-                content.alt = title || '';
-                createOverlay(content, title);
-                ev.preventDefault();
-                return;
-            }
-
-            if (vid) {
-                // try to discover URL: could be a <video> or a containing .video-preview element
-                let videoEl = ev.target;
-                if (videoEl.tagName === 'SOURCE' || videoEl.tagName === 'IMG') {
-                    // climb to parent .video-preview
-                    videoEl = ev.target.closest('.video-preview') || ev.target.closest('.media-message') || ev.target;
-                }
-                const source = videoEl.querySelector ? (videoEl.querySelector('video source')?.src || videoEl.querySelector('video')?.src) : null;
-                const fallbackSrc = videoEl.getAttribute ? (videoEl.getAttribute('data-src') || videoEl.getAttribute('src')) : null;
-                const src = source || fallbackSrc;
-                const title = (videoEl.getAttribute && (videoEl.getAttribute('data-name') || videoEl.getAttribute('alt'))) || '';
-
-                if (!src) return;
-
-                // prefer app handler if exists
-                if (window.app && typeof window.app.playVideo === 'function') {
-                    try { window.app.playVideo(src); return; } catch (e) { /* fallthrough */ }
-                }
-
-                // fallback: create overlay with <video>
-                const content = document.createElement('video');
-                content.className = 'media-fullscreen-video';
-                content.controls = true;
-                content.autoplay = true;
-
-                const sourceTag = document.createElement('source');
-                sourceTag.src = src;
-                content.appendChild(sourceTag);
-
-                createOverlay(content, title);
-                ev.preventDefault();
-                return;
-            }
-        }, false);
-    })();
-    </script>
-
-    <!-- Runtime layout helper: measure safe-area and header height and update CSS variables -->
-    <script>
-    (function () {
-        function isIOS() {
-            return /iP(hone|od|ad)/.test(navigator.userAgent);
-        }
-
-        function setCSSVar(name, value) {
-            try { document.documentElement.style.setProperty(name, value); } catch (e) {}
-        }
-
-        function updateHeaderVars() {
-            // Determine the currently visible header (chatHeader when open, otherwise app-header)
-            const chatHeader = document.getElementById('chatHeader');
-            const appHeader = document.querySelector('.app-header');
-            let headerEl = null;
-
-            if (chatHeader && window.getComputedStyle(chatHeader).display !== 'none' && document.body.contains(chatHeader)) {
-                headerEl = chatHeader;
-            } else if (appHeader) {
-                headerEl = appHeader;
-            } else {
-                headerEl = chatHeader || appHeader;
-            }
-
-            // safe top: prefer CSS env if available, else provide sensible fallback for iOS
-            let safeTop = 'env(safe-area-inset-top, 0px)';
-            try {
-                if (!(window.CSS && CSS.supports && CSS.supports('padding-top: env(safe-area-inset-top)'))) {
-                    safeTop = isIOS() ? '20px' : '0px';
-                }
-            } catch (e) {
-                safeTop = isIOS() ? '20px' : '0px';
-            }
-            setCSSVar('--safe-top', safeTop);
-
-            // header height (read offsetHeight to include any runtime paddings)
-            let headerHeight = 60;
-            if (headerEl && headerEl.offsetHeight) {
-                headerHeight = headerEl.offsetHeight;
-            }
-            // set as px so CSS calc() works
-            setCSSVar('--header-height', headerHeight + 'px');
-
-            // Also update messages container padding if present (defensive)
-            const messages = document.getElementById('messagesContainer');
-            if (messages) {
-                // add a small gap to avoid touching header
-                messages.style.paddingTop = 'calc(' + headerHeight + 'px + 8px)';
-            }
-        }
-
-        // Run on DOMContentLoaded and after short delays (some browsers report wrong sizes initially)
-        document.addEventListener('DOMContentLoaded', updateHeaderVars);
-        window.addEventListener('resize', function () {
-            // small debounce
-            clearTimeout(window.__stalk_header_resize);
-            window.__stalk_header_resize = setTimeout(updateHeaderVars, 120);
+            settingsBtn && settingsBtn.addEventListener('click', showSettings);
+            closeSettings && closeSettings.addEventListener('click', hideSettings);
+            quickSettings && quickSettings.addEventListener('click', () => { hideSettings(); showSettings(); });
         });
-
-        // For dynamic changes (when chatHeader toggles display or class), observe mutations
-        function observeHeaderChanges() {
-            const appHeader = document.querySelector('.app-header');
-            const chatHeader = document.getElementById('chatHeader');
-            try {
-                const obs = new MutationObserver(function () {
-                    updateHeaderVars();
-                });
-                if (appHeader) obs.observe(appHeader, { attributes: true, attributeFilter: ['style', 'class'] });
-                if (chatHeader) obs.observe(chatHeader, { attributes: true, attributeFilter: ['style', 'class'] });
-            } catch (e) {
-                // ignore if MutationObserver not available
-            }
-        }
-
-        // also use visualViewport if available for better keyboard handling
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', function () {
-                clearTimeout(window.__stalk_header_resize);
-                window.__stalk_header_resize = setTimeout(updateHeaderVars, 100);
-            });
-        }
-
-        // initial runs
-        setTimeout(updateHeaderVars, 120);
-        setTimeout(updateHeaderVars, 600);
-        observeHeaderChanges();
-    })();
     </script>
 
-    <!-- Service Worker registration & message forwarding to app.js -->
-    <script>
-      (function () {
-        if ('serviceWorker' in navigator) {
-          // register service worker at site root (/sw.js)
-          window.addEventListener('load', async () => {
-            try {
-              const reg = await navigator.serviceWorker.register('/sw.js');
-              console.log('ServiceWorker registered with scope:', reg.scope);
-            } catch (err) {
-              console.warn('ServiceWorker registration failed:', err);
-            }
-          });
-        }
-
-        // Forward messages from the SW to your app instance (if present)
-        navigator.serviceWorker && navigator.serviceWorker.addEventListener && navigator.serviceWorker.addEventListener('message', (ev) => {
-          try {
-            if (window.app && typeof window.app.handleServiceWorkerMessage === 'function') {
-              window.app.handleServiceWorkerMessage(ev.data);
-            } else {
-              // Generic fallback: dispatch a DOM event so app.js can pick it up
-              const event = new CustomEvent('swmessage', { detail: ev.data });
-              window.dispatchEvent(event);
-            }
-          } catch (e) {
-            console.warn('Error forwarding SW message to app:', e);
-          }
-        });
-      })();
-    </script>
 </body>
 </html>
