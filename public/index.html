@@ -25,10 +25,6 @@
             --primary-color: #3b82f6;
             --primary-dark: #2563eb;
             --primary-light: #60a5fa;
-
-            /* Safe area & header height variables (runtime-updated by JS for better cross-browser behavior) */
-            --safe-top: env(safe-area-inset-top, 0px);
-            --header-height: 60px;
         }
 
         /* Light Theme */
@@ -266,8 +262,6 @@
             box-shadow: var(--shadow);
             z-index: 100;
             min-height: 60px;
-            /* account for notch / safe area with extra padding-top */
-            padding-top: calc(1rem + var(--safe-top));
         }
 
         .app-title {
@@ -1186,8 +1180,8 @@
 
             /* Container below header */
             .chat-container {
-                margin-top: var(--header-height, 60px);
-                height: calc(100vh - var(--header-height, 60px));
+                margin-top: 60px;
+                height: calc(100vh - 60px);
                 display: flex;
                 overflow: hidden;
             }
@@ -1224,10 +1218,10 @@
                 background: var(--background);
             }
 
-            /* Chat header replaces app header position (fixed on mobile detail view) */
+            /* Chat header replaces app header position */
             .chat-header {
                 flex-shrink: 0;
-                min-height: var(--header-height, 60px);
+                min-height: 60px;
                 background: var(--primary-color);
                 color: white;
                 display: flex;
@@ -1236,10 +1230,8 @@
                 padding: 1rem;
                 z-index: 100;
                 border-bottom: none;
-                position: fixed;
+                position: sticky;
                 top: 0;
-                left: 0;
-                right: 0;
             }
 
             .chat-header .back-btn {
@@ -1273,8 +1265,7 @@
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
                 background: var(--surface-variant);
-                /* ensure messages start below the fixed header on mobile detail */
-                padding-top: calc(var(--header-height, 60px) + 8px);
+                max-height: calc(100vh - 60px - 80px);
                 min-height: 200px;
                 padding-bottom: 90px; /* leave space for input */
             }
@@ -2070,96 +2061,6 @@
                 return;
             }
         }, false);
-    })();
-    </script>
-
-    <!-- Runtime layout helper: measure safe-area and header height and update CSS variables -->
-    <script>
-    (function () {
-        function isIOS() {
-            return /iP(hone|od|ad)/.test(navigator.userAgent);
-        }
-
-        function setCSSVar(name, value) {
-            try { document.documentElement.style.setProperty(name, value); } catch (e) {}
-        }
-
-        function updateHeaderVars() {
-            // Determine the currently visible header (chatHeader when open, otherwise app-header)
-            const chatHeader = document.getElementById('chatHeader');
-            const appHeader = document.querySelector('.app-header');
-            let headerEl = null;
-
-            if (chatHeader && window.getComputedStyle(chatHeader).display !== 'none' && document.body.contains(chatHeader)) {
-                headerEl = chatHeader;
-            } else if (appHeader) {
-                headerEl = appHeader;
-            } else {
-                headerEl = chatHeader || appHeader;
-            }
-
-            // safe top: prefer CSS env if available, else provide sensible fallback for iOS
-            let safeTop = 'env(safe-area-inset-top, 0px)';
-            try {
-                if (!(window.CSS && CSS.supports && CSS.supports('padding-top: env(safe-area-inset-top)'))) {
-                    safeTop = isIOS() ? '20px' : '0px';
-                }
-            } catch (e) {
-                safeTop = isIOS() ? '20px' : '0px';
-            }
-            setCSSVar('--safe-top', safeTop);
-
-            // header height (read offsetHeight to include any runtime paddings)
-            let headerHeight = 60;
-            if (headerEl && headerEl.offsetHeight) {
-                headerHeight = headerEl.offsetHeight;
-            }
-            // set as px so CSS calc() works
-            setCSSVar('--header-height', headerHeight + 'px');
-
-            // Also update messages container padding if present (defensive)
-            const messages = document.getElementById('messagesContainer');
-            if (messages) {
-                // add a small gap to avoid touching header
-                messages.style.paddingTop = 'calc(' + headerHeight + 'px + 8px)';
-            }
-        }
-
-        // Run on DOMContentLoaded and after short delays (some browsers report wrong sizes initially)
-        document.addEventListener('DOMContentLoaded', updateHeaderVars);
-        window.addEventListener('resize', function () {
-            // small debounce
-            clearTimeout(window.__stalk_header_resize);
-            window.__stalk_header_resize = setTimeout(updateHeaderVars, 120);
-        });
-
-        // For dynamic changes (when chatHeader toggles display or class), observe mutations
-        function observeHeaderChanges() {
-            const appHeader = document.querySelector('.app-header');
-            const chatHeader = document.getElementById('chatHeader');
-            try {
-                const obs = new MutationObserver(function () {
-                    updateHeaderVars();
-                });
-                if (appHeader) obs.observe(appHeader, { attributes: true, attributeFilter: ['style', 'class'] });
-                if (chatHeader) obs.observe(chatHeader, { attributes: true, attributeFilter: ['style', 'class'] });
-            } catch (e) {
-                // ignore if MutationObserver not available
-            }
-        }
-
-        // also use visualViewport if available for better keyboard handling
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', function () {
-                clearTimeout(window.__stalk_header_resize);
-                window.__stalk_header_resize = setTimeout(updateHeaderVars, 100);
-            });
-        }
-
-        // initial runs
-        setTimeout(updateHeaderVars, 120);
-        setTimeout(updateHeaderVars, 600);
-        observeHeaderChanges();
     })();
     </script>
 
