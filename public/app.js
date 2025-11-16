@@ -1,9 +1,10 @@
 /* app.js - Full STalk class (complete file)
    Replaces existing app.js; includes fixes:
-   - Accessible close button + Escape-to-close
-   - Focus management when opening overlays
-   - Swipe-down to close on touch devices
-   - Proper listener cleanup
+   - Auth-aware socket connect with token
+   - Socket-first send with REST fallback and ack timeout
+   - Normalization & better logging for incoming messages
+   - Keeps message input until successful send (avoid losing typed text)
+   - Other UI / media improvements (unchanged from original except where noted)
 */
 
 class STalk {
@@ -1111,72 +1112,139 @@ class STalk {
         }
     }
 
-    // Socket connection with unread message tracking
+    // Socket connection with unread message tracking (improved & auth-aware)
     connectSocket() {
-        this.socket = io();
-
-        this.socket.on('connect', () => {
-            console.log('🔌 Connected to sTalk server');
-            this.socket.emit('join_user_room', this.currentUser.id);
-        });
-
-        this.socket.on('disconnect', () => {
-            console.log('🔌 Disconnected from server');
-            if (window.innerWidth > 768) {
-                this.showToast('📡 Connection lost - Reconnecting...', 'error');
-            }
-        });
-
-        this.socket.on('reconnect', () => {
-            console.log('🔌 Reconnected to server');
-            if (window.innerWidth > 768) {
-                this.showToast('📡 Connection restored!', 'success');
-            }
-            this.socket.emit('join_user_room', this.currentUser.id);
-        });
-
-        this.socket.on('message_received', (message) => {
-            console.log('📨 Message received:', message);
-
-            // Find sender user to get their ID
-            const senderUser = Array.from(this.users.values()).find(u => u.username === message.sender);
-            if (senderUser) {
-                // Increment unread count if not currently chatting with this user
-                if (!this.selectedUserId || this.selectedUserId != senderUser.id) {
-                    const currentCount = this.unreadCounts.get(senderUser.id) || 0;
-                    this.unreadCounts.set(senderUser.id, currentCount + 1);
-                    this.updateUserListUnreadIndicators();
-                }
-
-                // Add to UI if chatting with sender
-                if (this.selectedUserId && senderUser.id == this.selectedUserId) {
-                    this.addMessageToUI(message, true);
-                }
+        try {
+            // ensure we have a token & user
+            const token = this.token;
+            if (!token || !this.currentUser) {
+                console.warn('Socket connect skipped - no token / user available');
+                return;
             }
 
-            // Show a local browser notification if page is hidden and permission is granted
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            // if a socket exists, try clean disconnect first
+            if (this.socket) {
+                try { this.socket.off(); this.socket.disconnect(); } catch (e) {}
+                this.socket = null;
+            }
+
+            // Connect to same origin; include auth so server can validate
+            // If your server uses a custom path or namespace, supply it here.
+            this.socket = io(window.location.origin, {
+                path: '/socket.io', // adapt if your server uses custom path
+                auth: { token },
+                transports: ['websocket', 'polling'],
+                reconnectionAttempts: 10
+            });
+
+            this.socket.on('connect', () => {
+                console.log('🔌 Connected to sTalk server via socket.io', this.socket.id);
+                // emit join with user id (string or number)
                 try {
-                    this.showBrowserNotification({
-                        senderName: message.senderName || message.sender,
-                        content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
-                    });
-                } catch (e) { /* ignore */ }
-            }
+                    this.socket.emit('join_user_room', String(this.currentUser.id || this.currentUser.userId || this.currentUser.id?.toString()));
+                } catch (e) {
+                    console.warn('join_user_room emit failed', e);
+                }
+            });
 
-            // Play notification sound if enabled
-            if (this.soundEnabled) this.playNotificationSound();
-        });
+            this.socket.on('connect_error', (err) => {
+                console.error('Socket connect_error', err && err.message ? err.message : err);
+                // show a desktop toast once (not flood)
+                if (window.innerWidth > 768) {
+                    this.showToast('📡 Socket connection error', 'error');
+                }
+            });
 
-        this.socket.on('user_typing', ({ userId, userName, isTyping }) => {
-            if (userId !== this.currentUser.id && this.selectedUserId == userId) {
-                this.showTypingIndicator(userName, isTyping);
-            }
-        });
+            this.socket.on('disconnect', (reason) => {
+                console.log('🔌 Disconnected from server (reason):', reason);
+                if (window.innerWidth > 768) {
+                    this.showToast('📡 Connection lost - Reconnecting...', 'error');
+                }
+            });
 
-        this.socket.on('user_status_changed', ({ userId, isOnline }) => {
-            this.updateUserOnlineStatus(userId, isOnline);
-        });
+            this.socket.on('reconnect', (attemptNumber) => {
+                console.log('🔌 Reconnected to server after', attemptNumber, 'attempts');
+                if (window.innerWidth > 768) {
+                    this.showToast('📡 Connection restored!', 'success');
+                }
+                try {
+                    this.socket.emit('join_user_room', String(this.currentUser.id || this.currentUser.userId));
+                } catch (e) {}
+            });
+
+            // Robust message handler: normalize fields and log if unexpected
+            this.socket.on('message_received', (rawMessage) => {
+                console.log('📨 message_received event payload:', rawMessage);
+
+                // Normalize common server shapes
+                const message = {
+                    id: rawMessage.id || rawMessage._id || rawMessage.messageId,
+                    sender: rawMessage.sender || rawMessage.senderUsername || rawMessage.from || rawMessage.sender_name,
+                    senderId: rawMessage.senderId || rawMessage.fromId || rawMessage.userId,
+                    senderName: rawMessage.senderName || rawMessage.senderFullName || rawMessage.fromName,
+                    content: rawMessage.content || rawMessage.text || rawMessage.body || '',
+                    messageType: rawMessage.messageType || rawMessage.type || 'text',
+                    fileInfo: rawMessage.fileInfo || rawMessage.file || rawMessage.attachment || null,
+                    filePath: rawMessage.filePath || (rawMessage.fileInfo && (rawMessage.fileInfo.path || rawMessage.fileInfo.url)) || '',
+                    fileName: rawMessage.fileName || (rawMessage.fileInfo && (rawMessage.fileInfo.originalName || rawMessage.fileInfo.fileName)) || '',
+                    sentAt: rawMessage.sentAt || rawMessage.createdAt || rawMessage.timestamp || new Date().toISOString()
+                };
+
+                // Try to locate the sender user object (by username or id)
+                let senderUser = null;
+                if (message.senderId) senderUser = this.users.get(Number(message.senderId)) || this.users.get(String(message.senderId));
+                if (!senderUser && message.sender) {
+                    senderUser = Array.from(this.users.values()).find(u => (u.username === message.sender) || (u.username === message.sender.toString()));
+                }
+
+                // If we couldn't resolve sender to a user in list, optionally fetch users or log
+                if (!senderUser) {
+                    console.warn('Incoming message from unknown sender:', message.sender, message.senderId);
+                } else {
+                    // Increment unread if not active chat
+                    if (!this.selectedUserId || String(this.selectedUserId) !== String(senderUser.id)) {
+                        const currentCount = this.unreadCounts.get(senderUser.id) || 0;
+                        this.unreadCounts.set(senderUser.id, currentCount + 1);
+                        this.updateUserListUnreadIndicators();
+                    }
+
+                    // If chatting with them, display message
+                    if (this.selectedUserId && String(senderUser.id) === String(this.selectedUserId)) {
+                        this.addMessageToUI(message, true);
+                    }
+                }
+
+                // Notifications & sound
+                if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                    try {
+                        this.showBrowserNotification({
+                            senderName: message.senderName || message.sender || 'sTalk',
+                            content: message.content || (message.fileName ? `Sent: ${message.fileName}` : 'New message')
+                        });
+                    } catch (e) {}
+                }
+                if (this.soundEnabled) this.playNotificationSound();
+            });
+
+            // typing & status handlers - unchanged but robust to missing fields:
+            this.socket.on('user_typing', (payload) => {
+                const userId = payload?.userId || payload?.id || payload?.senderId;
+                const name = payload?.userName || payload?.name || payload?.senderName;
+                const isTyping = payload?.isTyping ?? payload?.typing ?? false;
+                if (userId && String(userId) !== String(this.currentUser?.id) && String(this.selectedUserId) === String(userId)) {
+                    this.showTypingIndicator(name || 'Someone', isTyping);
+                }
+            });
+
+            this.socket.on('user_status_changed', (payload) => {
+                const userId = payload?.userId || payload?.id;
+                const isOnline = payload?.isOnline ?? payload?.online ?? false;
+                if (userId) this.updateUserOnlineStatus(userId, isOnline);
+            });
+
+        } catch (error) {
+            console.error('connectSocket error:', error);
+        }
     }
 
     playNotificationSound() {
@@ -2556,47 +2624,119 @@ async attemptDownload(url, originalName = '') {
     if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
     return '📎';
 }
-
-
+    // attempt to send a message preferring socket (with ack) then falling back to REST
     async sendMessage() {
         const input = document.getElementById('messageInput');
+        if (!input) return;
         const content = input.value.trim();
-
         if (!content || !this.selectedUserId) return;
 
         const sendBtn = document.getElementById('sendBtn');
-        sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = true;
 
-        input.value = '';
-        this.autoResizeTextarea(input);
-        this.updateSendButton();
+        // Keep the original content in case of failure so we can restore it
+        const originalContent = content;
 
+        // optimistic UI decision: DO NOT clear input until we have confirmation OR we purposely show optimistic message.
+        // Here we'll clear only after success (avoid race conditions causing loss of typed text).
         try {
+            // If socket available and connected, prefer socket emit with ack (if server supports it)
+            if (this.socket && this.socket.connected) {
+                // payload compatible with server's send API: adapt keys as server expects (check server docs)
+                const payload = {
+                    toUserId: this.selectedUserId,
+                    content: originalContent,
+                    messageType: 'text'
+                };
+
+                // use a Promise around ack callback
+                const ackPromise = new Promise((resolve, reject) => {
+                    // set a timeout for ack
+                    let ackTimeout = setTimeout(() => {
+                        reject(new Error('Socket ack timeout'));
+                    }, 5000);
+
+                    try {
+                        this.socket.emit('send_message', payload, (err, msg) => {
+                            clearTimeout(ackTimeout);
+                            if (err) return reject(err);
+                            resolve(msg);
+                        });
+                    } catch (e) {
+                        clearTimeout(ackTimeout);
+                        reject(e);
+                    }
+                });
+
+                try {
+                    const serverMessage = await ackPromise;
+                    // serverMessage expected to be normalized; if not, create a normalized object
+                    const message = serverMessage || {
+                        id: null,
+                        sender: this.currentUser.username,
+                        senderId: this.currentUser.id,
+                        content: originalContent,
+                        messageType: 'text',
+                        sentAt: new Date().toISOString()
+                    };
+
+                    // add to UI and clear input
+                    this.addMessageToUI(message, true);
+                    input.value = '';
+                    this.autoResizeTextarea(input);
+                    this.updateSendButton();
+
+                    return;
+                } catch (socketErr) {
+                    console.warn('Socket send failed/timeout - will fallback to REST:', socketErr);
+                    // fallthrough to REST fallback
+                }
+            }
+
+            // Fallback: send via REST
             const response = await fetch(`${this.API_BASE}/chats/${this.selectedUserId}/messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.token}`
                 },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({ content: originalContent })
             });
 
             if (response.ok) {
                 const message = await response.json();
                 this.addMessageToUI(message, true);
-            } else {
-                input.value = content;
+
+                // Clear input only on success
+                input.value = '';
                 this.autoResizeTextarea(input);
                 this.updateSendButton();
-                this.showToast('❌ Failed to send message', 'error');
+            } else {
+                // attempt to read server error body
+                let errText = 'Failed to send message';
+                try {
+                    const errJson = await response.json();
+                    errText = errJson.error || errJson.message || JSON.stringify(errJson);
+                } catch (e) {
+                    errText = `${response.status} ${response.statusText}`;
+                }
+                console.error('sendMessage REST failed:', errText);
+                this.showToast(`❌ ${errText}`, 'error');
+
+                // keep the text so user can retry/edit
+                input.value = originalContent;
+                this.autoResizeTextarea(input);
+                this.updateSendButton();
             }
         } catch (error) {
-            input.value = content;
+            console.error('sendMessage error:', error);
+            this.showToast('❌ Connection error', 'error');
+            // restore input text on network error
+            input.value = originalContent;
             this.autoResizeTextarea(input);
             this.updateSendButton();
-            this.showToast('❌ Connection error', 'error');
         } finally {
-            sendBtn.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
         }
     }
 
