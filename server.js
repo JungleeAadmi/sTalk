@@ -57,18 +57,18 @@ function loadVapidFromFile() {
                 if (json && json.publicKey && json.privateKey) {
                     VAPID_PUBLIC_KEY = json.publicKey;
                     VAPID_PRIVATE_KEY = json.privateKey;
-                    console.log('🔑 Loaded VAPID keys from', p);
+                    console.log('ðŸ”‘ Loaded VAPID keys from', p);
                     try {
                         webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-                        console.log('✅ web-push configured with VAPID keys');
+                        console.log('âœ… web-push configured with VAPID keys');
                     } catch (e) {
-                        console.warn('⚠️ Failed to set VAPID details on web-push:', e);
+                        console.warn('âš ï¸ Failed to set VAPID details on web-push:', e);
                     }
                     return true;
                 }
             }
         } catch (err) {
-            console.warn('⚠️ Error reading VAPID file', p, ':', err.message || err);
+            console.warn('âš ï¸ Error reading VAPID file', p, ':', err.message || err);
         }
     }
     return false;
@@ -78,14 +78,14 @@ function loadVapidFromFile() {
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     try {
         webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-        console.log('✅ web-push configured from environment variables');
+        console.log('âœ… web-push configured from environment variables');
     } catch (e) {
-        console.warn('⚠️ Failed to set VAPID details from env:', e);
+        console.warn('âš ï¸ Failed to set VAPID details from env:', e);
     }
 } else {
     const loaded = loadVapidFromFile();
     if (!loaded) {
-        console.warn('⚠️ VAPID keys not configured. Push will be disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set (or .vapid.json is created).');
+        console.warn('âš ï¸ VAPID keys not configured. Push will be disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set (or .vapid.json is created).');
     }
 }
 
@@ -219,10 +219,10 @@ let db;
 const initDatabase = () => new Promise((resolve, reject) => {
     db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
-            console.error('❌ Database connection failed:', err);
+            console.error('âŒ Database connection failed:', err);
             return reject(err);
         }
-        console.log('✅ Connected to SQLite database');
+        console.log('âœ… Connected to SQLite database');
         initializeTables().then(resolve).catch(reject);
     });
 });
@@ -314,7 +314,7 @@ function createDefaultUsers() {
                 }
                 created++;
                 if (created === users.length) {
-                    console.log('✅ Default admin user created/verified');
+                    console.log('âœ… Default admin user created/verified');
                     resolve();
                 }
             });
@@ -349,15 +349,15 @@ function generateChatId(user1, user2) {
 }
 
 function getFileIcon(mimeType) {
-    if (!mimeType) return '📎';
-    if (mimeType.startsWith('image/')) return '🖼️';
-    if (mimeType.startsWith('audio/')) return '🎵';
-    if (mimeType.startsWith('video/')) return '🎥';
-    if (mimeType.includes('pdf')) return '📄';
-    if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
-    if (mimeType.includes('zip') || mimeType.includes('rar')) return '🗜️';
-    return '📎';
+    if (!mimeType) return 'ðŸ“Ž';
+    if (mimeType.startsWith('image/')) return 'ðŸ–¼ï¸';
+    if (mimeType.startsWith('audio/')) return 'ðŸŽµ';
+    if (mimeType.startsWith('video/')) return 'ðŸŽ¥';
+    if (mimeType.includes('pdf')) return 'ðŸ“„';
+    if (mimeType.includes('document') || mimeType.includes('word')) return 'ðŸ“';
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'ðŸ“Š';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return 'ðŸ—œï¸';
+    return 'ðŸ“Ž';
 }
 
 function generateTempPassword() {
@@ -391,7 +391,7 @@ async function sendPushToUser(userId, payload) {
                     await webpush.sendNotification(sub, JSON.stringify(payload));
                 } catch (e) {
                     const status = e && e.statusCode ? e.statusCode : null;
-                    console.warn('⚠️ Push send error for endpoint:', r.endpoint, 'status:', status);
+                    console.warn('âš ï¸ Push send error for endpoint:', r.endpoint, 'status:', status);
                     if (status === 410 || status === 404) {
                         db.run('DELETE FROM push_subscriptions WHERE id = ?', [r.id], () => {});
                     }
@@ -661,7 +661,7 @@ app.post('/api/chats/:otherUserId/messages', authenticateToken, (req, res) => {
 
                 // Push notification payload
                 const pushPayload = {
-                    title: `${responseData.senderName} • sTalk`,
+                    title: `${responseData.senderName} â€¢ sTalk`,
                     body: responseData.content ? responseData.content.substring(0, 120) : (responseData.fileName ? `Sent: ${responseData.fileName}` : 'New message'),
                     data: { chatId: responseData.chatId, sender: responseData.sender, url: `/chats/${responseData.chatId}` },
                     tag: `chat-${responseData.chatId}`
@@ -911,7 +911,7 @@ app.delete('/api/admin/clear-chats', authenticateToken, requireAdmin, (req, res)
 // Socket.IO handling
 const connectedUsers = new Map();
 io.on('connection', (socket) => {
-    console.log('📱 User connected:', socket.id);
+    console.log('ðŸ“± User connected:', socket.id);
 
     socket.on('join_user_room', (userId) => {
         socket.join(`user_${userId}`);
@@ -940,7 +940,7 @@ io.on('connection', (socket) => {
 
 // Error handler (multer-aware)
 app.use((err, req, res, next) => {
-    console.error('💥 Error:', err && err.stack ? err.stack : err);
+    console.error('ðŸ’¥ Error:', err && err.stack ? err.stack : err);
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File too large. Maximum size is 50MB.' });
         if (err.code === 'LIMIT_FILE_COUNT') return res.status(400).json({ error: 'Too many files. Maximum is 10 files per upload.' });
@@ -955,13 +955,13 @@ app.get('*', (req, res) => {
 
 // Graceful shutdown
 const gracefulShutdown = () => {
-    console.log('\n🔄 Shutting down gracefully...');
+    console.log('\nðŸ”„ Shutting down gracefully...');
     if (db) {
         db.run('UPDATE users SET is_online = 0', () => {
             db.close((err) => {
-                if (err) console.error('❌ Database close error:', err);
+                if (err) console.error('âŒ Database close error:', err);
                 server.close(() => {
-                    console.log('✅ Server closed');
+                    console.log('âœ… Server closed');
                     process.exit(0);
                 });
             });
@@ -979,17 +979,17 @@ async function startApp() {
     try {
         await initDatabase();
         server.listen(PORT, '0.0.0.0', () => {
-            console.log(`\n🚀 sTalk Server Started!`);
-            console.log(`📱 Access: http://localhost:${PORT}`);
-            console.log(`💾 Database: ${DB_PATH}`);
-            console.log(`📁 Uploads: ${UPLOAD_PATH}`);
-            console.log(`🖼️  Profiles: ${PROFILE_PATH}`);
-            console.log(`🌍 Environment: ${NODE_ENV}`);
-            console.log(`✨ Features: Dark Theme, File Upload, Profile Management, Admin User Management, Push Notifications`);
-            console.log(`\n✅ Production ready with full admin controls!`);
+            console.log(`\nðŸš€ sTalk Server Started!`);
+            console.log(`ðŸ“± Access: http://localhost:${PORT}`);
+            console.log(`ðŸ’¾ Database: ${DB_PATH}`);
+            console.log(`ðŸ“ Uploads: ${UPLOAD_PATH}`);
+            console.log(`ðŸ–¼ï¸  Profiles: ${PROFILE_PATH}`);
+            console.log(`ðŸŒ Environment: ${NODE_ENV}`);
+            console.log(`âœ¨ Features: Dark Theme, File Upload, Profile Management, Admin User Management, Push Notifications`);
+            console.log(`\nâœ… Production ready with full admin controls!`);
         });
     } catch (error) {
-        console.error('❌ Failed to start server:', error);
+        console.error('âŒ Failed to start server:', error);
         process.exit(1);
     }
 }
