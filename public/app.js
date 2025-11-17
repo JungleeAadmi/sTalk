@@ -1,5 +1,14 @@
 // public/app.js
 // sTalk - Enhanced App with Media Previews, Link Previews, Unread Counters + Push/Sound controls
+// --- Defensive: ensure a global app object exists before class definition (non-destructive) ---
+window.app = window.app || {};
+// Provide minimal safe defaults so other scripts can call them before instantiation
+if (typeof window.app.init !== 'function') window.app.init = () => Promise.resolve();
+if (typeof window.app.showMain !== 'function') window.app.showMain = () => {};
+if (typeof window.app.showLogin !== 'function') window.app.showLogin = () => {};
+if (typeof window.app.connect !== 'function') window.app.connect = () => {};
+if (typeof window.app.postLogin !== 'function') window.app.postLogin = (t) => Promise.resolve();
+
 class STalk {
     constructor() {
         this.API_BASE = window.location.origin + '/api';
@@ -14,6 +23,10 @@ class STalk {
         this.currentTheme = localStorage.getItem('sTalk_theme') || 'light';
         this.isProcessingUserManagement = false;
 
+        // lifecycle flags
+        this.initialized = false;
+        this.ready = false;
+
         // Push & sound settings
         this.pushEnabled = localStorage.getItem('sTalk_push_enabled') === 'true';
         // default sound enabled on desktop, disabled on small screens
@@ -25,39 +38,105 @@ class STalk {
             this.soundEnabled = this.soundEnabled === 'true';
         }
 
+        // Expose a safe handle to receive SW messages (may be replaced later)
+        window.app = window.app || {};
+        window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage || ((d) => { if (d) console.debug('SW msg', d); });
+
         // Defer initialization until DOM ready (constructor may be called earlier)
         document.addEventListener('DOMContentLoaded', () => {
+            // assign this instance as global app object (non-destructive)
+            try {
+                // If something else already set window.app to a full STalk instance, keep it.
+                if (!(window.app instanceof STalk)) {
+                    window.app = this;
+                } else {
+                    // merge properties into existing instance if needed
+                    Object.assign(window.app, this);
+                }
+            } catch (e) { console.warn('assign global app failed', e); }
+
+            // Bind lifecycle aliases so other scripts can call these names
+            try {
+                window.app.init = this.initializeApp.bind(this);
+                window.app.showMain = this.showMain.bind(this);
+                window.app.showLogin = this.showLogin.bind(this);
+                window.app.connect = this.connectSocket.bind(this);
+                window.app.postLogin = this.postLogin.bind(this);
+                // flags
+                window.app.ready = this.ready;
+                window.app.initialized = this.initialized;
+            } catch (e) { console.warn('binding aliases failed', e); }
+
             this.initializeApp();
             this.setupEventListeners();
             this.applyTheme(this.currentTheme);
 
             // expose SW message handler for index.html forwarding and external calls
-            window.app && (window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage || this.handleServiceWorkerMessage.bind(this));
+            window.app.handleServiceWorkerMessage = this.handleServiceWorkerMessage.bind(this);
         });
+    }
+
+    // Post-login helper used by external fallbacks
+    async postLogin(token) {
+        try {
+            if (!token) token = localStorage.getItem('sTalk_token');
+            if (!token) return Promise.reject(new Error('no-token'));
+
+            this.token = token;
+            localStorage.setItem('sTalk_token', token);
+
+            // try to validate token and load app
+            const valid = await this.validateToken();
+            if (valid) {
+                await this.loadMainApp();
+                return Promise.resolve();
+            } else {
+                this.showLogin();
+                return Promise.reject(new Error('invalid-token'));
+            }
+        } catch (e) {
+            console.warn('postLogin error', e);
+            this.showLogin();
+            return Promise.reject(e);
+        }
     }
 
     async initializeApp() {
         this.showLoading();
+        // mark initialized early so other scripts know init started
+        this.initialized = true;
+        try {
+            // Wire fallback listener for CustomEvent 'swmessage' (index.html uses this)
+            window.addEventListener('swmessage', (ev) => {
+                try {
+                    this.handleServiceWorkerMessage(ev.detail);
+                } catch (e) { /* ignore */ }
+            });
 
-        // Wire fallback listener for CustomEvent 'swmessage' (index.html uses this)
-        window.addEventListener('swmessage', (ev) => {
-            try {
-                this.handleServiceWorkerMessage(ev.detail);
-            } catch (e) { /* ignore */ }
-        });
-
-        if (this.token) {
-            const isValid = await this.validateToken();
-            if (isValid) {
-                await this.loadMainApp();
+            // If token exists when app loads, try to validate and load main app
+            this.token = this.token || localStorage.getItem('sTalk_token');
+            if (this.token) {
+                const isValid = await this.validateToken();
+                if (isValid) {
+                    await this.loadMainApp();
+                    this.ready = true;
+                } else {
+                    this.showLogin();
+                    this.ready = false;
+                }
             } else {
                 this.showLogin();
+                this.ready = false;
             }
-        } else {
+        } catch (e) {
+            console.error('initializeApp error', e);
             this.showLogin();
+            this.ready = false;
+        } finally {
+            this.hideLoading();
+            // reflect flags on global app object too
+            try { window.app.ready = this.ready; window.app.initialized = this.initialized; } catch (e) {}
         }
-
-        this.hideLoading();
     }
 
     setupEventListeners() {
@@ -999,7 +1078,9 @@ class STalk {
                 localStorage.setItem('sTalk_token', this.token);
                 localStorage.setItem('sTalk_user', JSON.stringify(this.currentUser));
 
-                await this.loadMainApp();
+                // After login, call postLogin to centralize post-login behavior
+                await this.postLogin(this.token);
+
                 // Only show toast on desktop
                 if (window.innerWidth > 768) {
                     this.showToast(`🎉 Welcome ${this.currentUser.fullName}!`, 'success');
@@ -1035,6 +1116,7 @@ class STalk {
                 return false;
             }
         } catch (error) {
+            // Network errors - treat as invalid for now (allows user to re-login)
             return false;
         }
     }
@@ -1181,6 +1263,10 @@ class STalk {
         if (loginUsername) loginUsername.value = '';
         if (loginPassword) loginPassword.value = '';
         if (loginUsername) loginUsername.focus();
+
+        // reflect flags
+        this.ready = false;
+        try { window.app.ready = this.ready; } catch (e) {}
     }
 
     async loadMainApp() {
@@ -1192,12 +1278,27 @@ class STalk {
         if (loadingScreen) loadingScreen.classList.add('d-none');
         if (mainApp) mainApp.classList.remove('d-none');
 
+        // load current user from local storage if not set
+        try {
+            if (!this.currentUser) {
+                const saved = localStorage.getItem('sTalk_user');
+                if (saved) this.currentUser = JSON.parse(saved);
+            }
+        } catch (e) {}
+
         this.updateUserInterface();
+
+        // ensure socket connects with token if available
         this.connectSocket();
+
         await this.loadUsers();
 
         // initialize push registration UI + attempt (if previously enabled)
         await this.initPush();
+
+        // mark ready
+        this.ready = true;
+        try { window.app.ready = true; } catch (e) {}
     }
 
     updateUserInterface() {
@@ -1223,12 +1324,30 @@ class STalk {
     // Socket connection with unread message tracking
     connectSocket() {
         try {
-            if (!window.io) {
-                console.warn('socket.io client not loaded (window.io missing)');
+            if (!window.io && !window.io === undefined) {
+                // If socket.io client isn't loaded, warn and return.
+                if (typeof io === 'undefined') {
+                    console.warn('socket.io client not loaded (io missing)');
+                    return;
+                }
+            }
+            // Avoid reconnecting if socket already present and connected
+            if (this.socket && this.socket.connected) {
+                return this.socket;
+            }
+
+            // create socket - pass token if available
+            const opts = {};
+            if (this.token) {
+                // many server configs accept auth token via 'auth' on client
+                opts.auth = { token: this.token };
+            }
+            this.socket = (typeof io !== 'undefined') ? io(undefined, opts) : null;
+
+            if (!this.socket) {
+                console.warn('connectSocket: socket creation returned null');
                 return;
             }
-            // create socket (default path)
-            this.socket = io();
 
             this.socket.on('connect', () => {
                 console.log('🔌 Connected to sTalk server');
@@ -2315,12 +2434,25 @@ class STalk {
 }
 
 // Initialize app when DOM is loaded (kept for compatibility)
+// If something else created window.app already, don't overwrite a full STalk instance
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.app) {
+    if (!(window.app instanceof STalk)) {
         console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
-        window.app = new STalk();
-        // expose SW handler immediately too
-        window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage.bind(window.app);
+        const instance = new STalk();
+        // if window.app was an object, replace/merge with instance
+        try {
+            window.app = instance;
+            // alias common lifecycle names for external code expectations
+            window.app.init = instance.initializeApp.bind(instance);
+            window.app.showMain = instance.showMain.bind(instance);
+            window.app.showLogin = instance.showLogin.bind(instance);
+            window.app.connect = instance.connectSocket.bind(instance);
+            window.app.postLogin = instance.postLogin.bind(instance);
+            window.app.ready = instance.ready;
+            window.app.initialized = instance.initialized;
+        } catch (e) {
+            console.warn('error assigning global app instance', e);
+        }
     } else {
         // ensure handler exists
         window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage || (() => {});
@@ -2331,12 +2463,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // keep this lightweight; registration also happens inside initPush/ensureServiceWorkerRegistered
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
+        // make registration defensive to avoid double-register issues
+        navigator.serviceWorker.getRegistration('/sw.js').then(reg => {
+            if (reg) {
+                console.log('🔧 Service Worker already registered');
+                return reg;
+            }
+            return navigator.serviceWorker.register('/sw.js').then(registration => {
                 console.log('🔧 Service Worker registered');
-            })
-            .catch(error => {
+                return registration;
+            }).catch(error => {
                 console.log('🔧 Service Worker registration failed', error);
             });
+        }).catch(err => {
+            // fallback: try registering directly
+            navigator.serviceWorker.register('/sw.js').then(() => {
+                console.log('🔧 Service Worker registered (fallback)');
+            }).catch(error => {
+                console.log('🔧 Service Worker registration failed (fallback)', error);
+            });
+        });
     });
 }
