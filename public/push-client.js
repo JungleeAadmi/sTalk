@@ -1,6 +1,6 @@
 // public/push-client.js
 // Push client for sTalk - registers service worker, subscribes and posts subscription to server
-// Enhanced with iOS instructions modal, settings wiring, and safer permission flow.
+// Enhanced with iOS instructions modal, settings wiring, safer permission flow, token-queueing.
 
 (function () {
   'use strict';
@@ -51,7 +51,7 @@
 
     function closeModal() {
       if (dontShow && dontShow.checked) {
-        localStorage.setItem(IOS_MODAL_KEY, '1');
+        try { localStorage.setItem(IOS_MODAL_KEY, '1'); } catch (e) {}
       }
       modal.classList.remove('show');
       modal.setAttribute('aria-hidden', 'true');
@@ -72,8 +72,23 @@
 
   function shouldShowIOSInstructions() {
     if (!isIOS()) return false;
-    if (localStorage.getItem(IOS_MODAL_KEY) === '1') return false;
+    try {
+      if (localStorage.getItem(IOS_MODAL_KEY) === '1') return false;
+    } catch (e) { /* ignore */ }
     return typeof Notification !== 'undefined' && Notification.permission !== 'granted';
+  }
+
+  // Helper to safely read token from common places
+  function getAuthToken() {
+    try {
+      if (window.app && window.app.token) return window.app.token;
+      if (window.authToken) return window.authToken;
+      const t = localStorage.getItem('sTalk_token');
+      if (t) return t;
+    } catch (e) {
+      // localStorage may throw in some contexts; ignore
+    }
+    return null;
   }
 
   const pushClient = {
@@ -83,13 +98,46 @@
     serverPushAvailable: false,
     _initialized: false,
 
+    // internal queued subscription if token missing when trying to post
+    _queuedSubscription: null,
+    // internal cached token (optional) if set via setAuthToken()
+    _authToken: null,
+
+    // Expose method to set token manually (call from app after login)
+    setAuthToken(token) {
+      try {
+        this._authToken = token;
+        // also set a global for compatibility
+        try { window.authToken = token; } catch (e) {}
+        // flush queued subscription if any
+        if (this._queuedSubscription) {
+          this._flushQueuedSubscription().catch((e) => console.warn('flushQueuedSubscription error', e));
+        }
+      } catch (e) {
+        console.warn('setAuthToken error', e);
+      }
+    },
+
+    async _flushQueuedSubscription() {
+      if (!this._queuedSubscription) return;
+      // attempt to post queued subscription now that token is available
+      try {
+        await this.postSubscription(this._queuedSubscription);
+      } catch (e) {
+        console.warn('Failed flushing queued subscription', e);
+      } finally {
+        this._queuedSubscription = null;
+      }
+    },
+
+    // Prevent double-init
     async init() {
-      // Prevent double-init
       if (this._initialized) return;
       this._initialized = true;
 
       this.setupUI();
 
+      // Basic support checks
       if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
         console.info('Push not supported in this browser');
         this.updatePermissionUI();
@@ -99,12 +147,11 @@
       // Register SW or find existing registration
       try {
         try {
-          // register with requested scope
           this.registration = await navigator.serviceWorker.register(SW_PATH, { scope: REQ_SCOPE });
-          console.info('Service Worker registered', this.registration.scope);
+          console.info('Service Worker registered', this.registration && this.registration.scope);
         } catch (regErr) {
-          console.warn('SW register warning, attempting to locate existing registration:', regErr?.message || regErr);
-          // fallback: try to get registration for scope, or any registration
+          // fallback: try to locate any existing registration
+          console.warn('SW register warning, attempting to locate existing registration:', regErr && regErr.message ? regErr.message : regErr);
           try {
             this.registration = await navigator.serviceWorker.getRegistration(REQ_SCOPE);
             if (!this.registration) {
@@ -119,28 +166,32 @@
         }
 
         // Listen for SW messages safely
-        if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === 'function') {
-          navigator.serviceWorker.addEventListener('message', (ev) => {
-            try {
-              const payload = ev && ev.data ? ev.data : null;
-              const type = payload && payload.type ? payload.type : null;
-              const data = payload && payload.data ? payload.data : null;
+        try {
+          if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === 'function') {
+            navigator.serviceWorker.addEventListener('message', (ev) => {
+              try {
+                const payload = ev && ev.data ? ev.data : null;
+                const type = payload && payload.type ? payload.type : null;
+                const data = payload && payload.data ? payload.data : null;
 
-              if (type === 'notification-click') {
-                if (window.app && typeof window.app.showToast === 'function') window.app.showToast('🔔 Notification clicked', 'info');
-                if (data && data.url && window.app && typeof window.app.handleNotificationClick === 'function') {
-                  try { window.app.handleNotificationClick(data); } catch (e) { console.warn('handleNotificationClick error', e); }
+                if (type === 'notification-click') {
+                  if (window.app && typeof window.app.showToast === 'function') window.app.showToast('🔔 Notification clicked', 'info');
+                  if (data && data.url && window.app && typeof window.app.handleNotificationClick === 'function') {
+                    try { window.app.handleNotificationClick(data); } catch (e) { console.warn('handleNotificationClick error', e); }
+                  }
                 }
-              }
 
-              if (type === 'pushsubscriptionchange') {
-                console.info('Push subscription changed message received from SW - attempting re-subscribe');
-                this.subscribe(true).catch(()=>{});
+                if (type === 'pushsubscriptionchange') {
+                  console.info('Push subscription changed message received from SW - attempting re-subscribe');
+                  this.subscribe(true).catch(()=>{});
+                }
+              } catch (e) {
+                console.warn('SW message handler error', e);
               }
-            } catch (e) {
-              console.warn('SW message handler error', e);
-            }
-          });
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to attach serviceWorker message listener', e);
         }
 
         // Fetch VAPID public key from server
@@ -176,6 +227,7 @@
             const existing = await this.registration.pushManager.getSubscription();
             if (existing) {
               this.subscription = existing;
+              // If there's a token now, post; otherwise queue
               await this.postSubscription(existing).catch(()=>{});
             }
           }
@@ -194,6 +246,9 @@
         console.error('Push init unexpected error', err);
         this.updatePermissionUI();
       }
+
+      // Start watching for token changes (storage event + same-tab poll)
+      this._startTokenWatcher();
     },
 
     setupUI() {
@@ -204,7 +259,6 @@
         this.updatePermissionUI();
 
         if (enablePushToggle) {
-          // initialize checked state lazily; will be updated by updatePermissionUI too
           enablePushToggle.checked = (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !!this.subscription && this.serverPushAvailable);
           enablePushToggle.addEventListener('change', async () => {
             try {
@@ -240,9 +294,16 @@
             const ok = await this.requestPermission();
             this.updatePermissionUI();
             if (ok) {
-              if (localStorage.getItem('sTalk_token')) {
-                await this.init();
-                if (this.serverPushAvailable) await this.subscribe(true).catch(()=>{});
+              try {
+                if (getAuthToken()) {
+                  await this.init();
+                  if (this.serverPushAvailable) await this.subscribe(true).catch(()=>{});
+                } else {
+                  // no token yet - ensure init runs and subscription queued until token available
+                  await this.init();
+                }
+              } catch (e) {
+                console.warn('requestBtn handler error', e);
               }
             }
           });
@@ -382,21 +443,25 @@
       }
     },
 
+    // Posts subscription to server, but queues it if no auth token present
     async postSubscription(subscription) {
       try {
-        const token = localStorage.getItem('sTalk_token');
+        const token = this._authToken || getAuthToken();
         if (!token) {
-          console.warn('No auth token to send subscription to server');
+          // queue for later when token becomes available
+          console.info('No auth token available — queuing subscription to post when token available');
+          this._queuedSubscription = subscription;
           return;
         }
 
+        const body = { subscription };
         const resp = await fetch(SUBSCRIBE_ENDPOINT, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ subscription })
+          body: JSON.stringify(body)
         });
 
         if (!resp.ok) {
@@ -415,9 +480,12 @@
 
     async postUnsubscribe(subscription) {
       try {
-        const token = localStorage.getItem('sTalk_token');
-        const endpoint = subscription && (subscription.endpoint || subscription?.toJSON?.()?.endpoint);
-        if (!token || !endpoint) return;
+        const token = this._authToken || getAuthToken();
+        const endpoint = subscription && (subscription.endpoint || (subscription.toJSON && subscription.toJSON().endpoint));
+        if (!token || !endpoint) {
+          // can't notify server if missing token or endpoint
+          return;
+        }
         await fetch(UNSUBSCRIBE_ENDPOINT, {
           method: 'POST',
           headers: {
@@ -429,20 +497,61 @@
       } catch (err) {
         console.error('postUnsubscribe error', err);
       }
+    },
+
+    // Internal: watch for token changes (storage event + same-tab poll)
+    _startTokenWatcher() {
+      // storage event: cross-tab token updates
+      try {
+        window.addEventListener('storage', (ev) => {
+          try {
+            if (!ev) return;
+            if (ev.key === 'sTalk_token') {
+              const newToken = ev.newValue;
+              if (newToken) {
+                this.setAuthToken(newToken);
+              }
+            }
+          } catch (e) {}
+        });
+      } catch (e) {}
+
+      // same-tab writes to localStorage do not trigger storage event; poll for token changes (cheap)
+      try {
+        if (!window.__stalk_push_token_poll) {
+          window.__stalk_push_token_poll = setInterval(() => {
+            try {
+              const tk = getAuthToken();
+              if (tk) {
+                // if we haven't cached it yet, set and flush queued
+                if (!this._authToken) {
+                  this.setAuthToken(tk);
+                }
+              }
+            } catch (e) {}
+          }, 400);
+        }
+      } catch (e) {}
     }
   };
 
   // expose
   window.pushClient = pushClient;
 
-  // Auto-init after DOM ready
+  // Auto-init after DOM ready (non-blocking)
   document.addEventListener('DOMContentLoaded', () => {
     (async () => {
       try {
+        // If token already present, set internal token early so postSubscription can run immediately
+        const tok = getAuthToken();
+        if (tok) {
+          pushClient.setAuthToken(tok);
+        }
+
         await pushClient.init();
 
         // If user already logged in and permission granted, attempt subscribe shortly after init
-        if (localStorage.getItem('sTalk_token')) {
+        if (getAuthToken()) {
           setTimeout(async () => {
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && pushClient.serverPushAvailable) {
               await pushClient.subscribe().catch(()=>{});
