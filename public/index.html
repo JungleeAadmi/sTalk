@@ -13,6 +13,9 @@
     <meta name="apple-mobile-web-app-title" content="sTalk">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+    <!-- Modern meta for other browsers (prevents deprecation warning) -->
+    <meta name="mobile-web-app-capable" content="yes">
+
     <style>
         /* ---------- (existing styles kept intact) ---------- */
         * {
@@ -1560,6 +1563,12 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#3b82f6">
 
+    <!-- Build/version marker (helps confirm deployed file) -->
+    <script>
+        // Update this value on each deploy to identify the HTML version in console
+        window.__stalk_build = '20251118-1';
+        console.info('sTalk index.html build:', window.__stalk_build);
+    </script>
 </head>
 <body data-theme="light">
     <!-- Toast Container - Desktop only -->
@@ -1860,6 +1869,49 @@
     <!-- Socket.IO and App Scripts (deferred to ensure DOM is parsed first) -->
     <script src="/socket.io/socket.io.js" defer></script>
     <script src="/push-client.js" defer></script>
+
+    <!-- Small helper: optional force-update via URL param -->
+    <script>
+      (function(){
+        // If you append ?force_update=1 to the URL, the page will unregister SWs and clear caches, then reload.
+        try {
+          const params = new URLSearchParams(location.search);
+          if (params.get('force_update') === '1') {
+            console.info('force_update=1 detected — clearing service workers and caches now (will reload).');
+            (async function(){
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  for (const r of regs) {
+                    try { await r.unregister(); } catch(e){ console.warn('unregister failed', e); }
+                  }
+                  console.info('Service worker registrations removed:', regs.length);
+                }
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  for (const k of keys) {
+                    try { await caches.delete(k); } catch(e){ console.warn('cache delete failed', e); }
+                  }
+                  console.info('Caches cleared:', (await caches.keys()));
+                }
+              } catch (e) {
+                console.warn('force update cleanup error', e);
+              } finally {
+                // remove the flag so reload doesn't loop
+                try {
+                  const u = new URL(location.href);
+                  u.searchParams.delete('force_update');
+                  location.replace(u.toString());
+                } catch (e) {
+                  location.reload(true);
+                }
+              }
+            })();
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
+
     <script src="/app.js" defer></script>
     <!-- Push Notification Client is loaded above (deferred) -->
 
