@@ -20,23 +20,23 @@
   const PUSH_DESC_ID = 'pushPermissionDescription';
 
   function urlBase64ToUint8Array(base64String) {
-    // Standard helper for VAPID key conversion
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
+    const padding = '='.repeat((4 - (base64String?.length || 0) % 4) % 4);
+    const base64 = (base64String || '') + padding;
+    const safe = base64.replace(/\-/g, '+').replace(/_/g, '/');
+    try {
+      const rawData = atob(safe);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    } catch (e) {
+      throw new Error('Invalid base64 string for VAPID key');
     }
-    return outputArray;
   }
 
   function isIOS() {
     return /iP(hone|od|ad)/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-
-  function isInStandaloneMode() {
-    return ('standalone' in navigator && navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
   }
 
   function showIOSModal() {
@@ -60,7 +60,6 @@
     }
 
     function openSafari() {
-      // Suggest opening Safari -- try to open the site's URL in a new tab
       try {
         window.open(window.location.href, '_blank');
       } catch (e) {}
@@ -74,121 +73,164 @@
   function shouldShowIOSInstructions() {
     if (!isIOS()) return false;
     if (localStorage.getItem(IOS_MODAL_KEY) === '1') return false;
-    // If not in standalone and permission is default (user hasn't allowed) show.
-    return Notification.permission !== 'granted';
+    return typeof Notification !== 'undefined' && Notification.permission !== 'granted';
   }
 
   const pushClient = {
     registration: null,
     applicationServerKey: null,
     subscription: null,
+    serverPushAvailable: false,
+    _initialized: false,
 
     async init() {
-      // Setup UI controls wiring
+      // Prevent double-init
+      if (this._initialized) return;
+      this._initialized = true;
+
       this.setupUI();
 
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
         console.info('Push not supported in this browser');
         this.updatePermissionUI();
         return;
       }
 
+      // Register SW or find existing registration
       try {
-        // Register SW (if not already)
-        this.registration = await navigator.serviceWorker.register(SW_PATH, { scope: REQ_SCOPE });
-        console.info('Service Worker registered', this.registration.scope);
-
-        // listen for SW messages
-        navigator.serviceWorker.addEventListener('message', (ev) => {
+        try {
+          // register with requested scope
+          this.registration = await navigator.serviceWorker.register(SW_PATH, { scope: REQ_SCOPE });
+          console.info('Service Worker registered', this.registration.scope);
+        } catch (regErr) {
+          console.warn('SW register warning, attempting to locate existing registration:', regErr?.message || regErr);
+          // fallback: try to get registration for scope, or any registration
           try {
-            const { type, data } = ev.data || {};
-            if (type === 'notification-click' && window.app) {
-              window.app.showToast('🔔 Notification clicked', 'info');
-              if (data && data.url) {
-                window.app && window.app.handleNotificationClick && window.app.handleNotificationClick(data);
-              }
+            this.registration = await navigator.serviceWorker.getRegistration(REQ_SCOPE);
+            if (!this.registration) {
+              const allRegs = await navigator.serviceWorker.getRegistrations();
+              this.registration = (allRegs && allRegs.length) ? allRegs[0] : null;
             }
-            if (type === 'pushsubscriptionchange') {
-              console.info('Push subscription changed - re-subscribing');
-              this.subscribe(true);
-            }
-          } catch (e) {}
-        });
-
-        // Get VAPID public key from server
-        const r = await fetch(API_KEY_ENDPOINT, { credentials: 'same-origin' });
-        if (r.ok) {
-          const json = await r.json();
-          if (json && json.publicKey) {
-            this.applicationServerKey = urlBase64ToUint8Array(json.publicKey);
-          } else {
-            console.warn('No VAPID public key available from server');
+            if (this.registration) console.info('Found existing Service Worker registration', this.registration.scope);
+          } catch (e) {
+            console.warn('Failed to find existing SW registration', e);
+            this.registration = null;
           }
-        } else {
-          console.warn('Failed to fetch VAPID key from server');
         }
 
-        // Check existing subscription
-        this.subscription = await this.registration.pushManager.getSubscription();
-        if (this.subscription) {
-          console.info('Existing push subscription found');
-          // Try to ensure server has it (optional)
-          await this.postSubscription(this.subscription);
+        // Listen for SW messages safely
+        if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === 'function') {
+          navigator.serviceWorker.addEventListener('message', (ev) => {
+            try {
+              const payload = ev && ev.data ? ev.data : null;
+              const type = payload && payload.type ? payload.type : null;
+              const data = payload && payload.data ? payload.data : null;
+
+              if (type === 'notification-click') {
+                if (window.app && typeof window.app.showToast === 'function') window.app.showToast('🔔 Notification clicked', 'info');
+                if (data && data.url && window.app && typeof window.app.handleNotificationClick === 'function') {
+                  try { window.app.handleNotificationClick(data); } catch (e) { console.warn('handleNotificationClick error', e); }
+                }
+              }
+
+              if (type === 'pushsubscriptionchange') {
+                console.info('Push subscription changed message received from SW - attempting re-subscribe');
+                this.subscribe(true).catch(()=>{});
+              }
+            } catch (e) {
+              console.warn('SW message handler error', e);
+            }
+          });
         }
 
-        // update UI permission states
+        // Fetch VAPID public key from server
+        try {
+          const r = await fetch(API_KEY_ENDPOINT, { credentials: 'same-origin' });
+          let json = null;
+          if (r.ok) {
+            try { json = await r.json(); } catch (e) { json = null; }
+          }
+
+          if (r.ok && json && typeof json.publicKey === 'string' && json.publicKey.trim()) {
+            try {
+              this.applicationServerKey = urlBase64ToUint8Array(json.publicKey.trim());
+              this.serverPushAvailable = true;
+            } catch (e) {
+              console.warn('Invalid publicKey from server - disabling server push', e);
+              this.applicationServerKey = null;
+              this.serverPushAvailable = false;
+            }
+          } else {
+            this.applicationServerKey = null;
+            this.serverPushAvailable = false;
+            console.info('Push not enabled on server or publicKey missing');
+          }
+        } catch (err) {
+          console.warn('Failed to fetch VAPID key from server', err);
+          this.serverPushAvailable = false;
+        }
+
+        // Check existing subscription and post it if present
+        try {
+          if (this.registration && this.registration.pushManager) {
+            const existing = await this.registration.pushManager.getSubscription();
+            if (existing) {
+              this.subscription = existing;
+              await this.postSubscription(existing).catch(()=>{});
+            }
+          }
+        } catch (e) {
+          console.warn('Error checking existing subscription', e);
+        }
+
         this.updatePermissionUI();
 
-        // Show iOS modal if appropriate and not shown
         if (shouldShowIOSInstructions()) {
-          // If the UA is iOS and notifications not granted, show the instructions in Settings.
-          // But do not automatically interrupt — show a small CTA in Settings
           const showBtn = document.getElementById(SHOW_IOS_BTN_ID);
           if (showBtn) showBtn.style.display = 'inline-block';
-          // If user is in standalone or explicitly allowed, we might try subscription.
-          if (Notification.permission === 'granted') {
-            // ensure subscription present
-            if (!this.subscription && this.applicationServerKey) {
-              await this.subscribe();
-            }
-          }
         }
 
       } catch (err) {
-        console.error('Push init error', err);
+        console.error('Push init unexpected error', err);
         this.updatePermissionUI();
       }
     },
 
     setupUI() {
-      // Hook up Settings toggles and buttons if present
       try {
         const enablePushToggle = document.getElementById(ENABLE_PUSH_TOGGLE_ID);
         const requestBtn = document.getElementById(REQUEST_BTN_ID);
         const showIOSBtn = document.getElementById(SHOW_IOS_BTN_ID);
-        const pushDesc = document.getElementById(PUSH_DESC_ID);
-
-        // Update UI text depending on permission
         this.updatePermissionUI();
 
         if (enablePushToggle) {
-          // initialize checkbox based on current subscription / permission
-          enablePushToggle.checked = (Notification && Notification.permission === 'granted' && !!this.subscription);
-          enablePushToggle.addEventListener('change', async (ev) => {
-            if (enablePushToggle.checked) {
-              // request permission and subscribe
-              const ok = await this.requestPermission();
-              if (!ok) {
-                enablePushToggle.checked = false;
-                this.updatePermissionUI();
-                return;
+          // initialize checked state lazily; will be updated by updatePermissionUI too
+          enablePushToggle.checked = (typeof Notification !== 'undefined' && Notification.permission === 'granted' && !!this.subscription && this.serverPushAvailable);
+          enablePushToggle.addEventListener('change', async () => {
+            try {
+              if (enablePushToggle.checked) {
+                const ok = await this.requestPermission();
+                if (!ok) {
+                  enablePushToggle.checked = false;
+                  this.updatePermissionUI();
+                  return;
+                }
+                if (!this.serverPushAvailable) {
+                  alert('Push notifications are not enabled on the server.');
+                  enablePushToggle.checked = false;
+                  this.updatePermissionUI();
+                  return;
+                }
+                await this.init();
+                await this.subscribe(true);
+              } else {
+                await this.unsubscribe();
               }
-              await this.init(); // ensure registration exists and key fetched
-              await this.subscribe(true);
-            } else {
-              await this.unsubscribe();
+            } catch (e) {
+              console.warn('Push toggle handler error', e);
+            } finally {
+              this.updatePermissionUI();
             }
-            this.updatePermissionUI();
           });
         }
 
@@ -198,10 +240,9 @@
             const ok = await this.requestPermission();
             this.updatePermissionUI();
             if (ok) {
-              // subscribe if logged in
               if (localStorage.getItem('sTalk_token')) {
                 await this.init();
-                await this.subscribe(true);
+                if (this.serverPushAvailable) await this.subscribe(true).catch(()=>{});
               }
             }
           });
@@ -228,23 +269,23 @@
         const state = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
         if (pushDesc) {
           if (state === 'granted') {
-            pushDesc.textContent = 'Permission granted — push enabled';
+            pushDesc.textContent = this.serverPushAvailable ? 'Permission granted — push enabled' : 'Permission granted — server push disabled';
             if (requestBtn) requestBtn.style.display = 'none';
             if (showIOSBtn) showIOSBtn.style.display = 'none';
-            if (enablePushToggle) enablePushToggle.checked = !!this.subscription;
+            if (enablePushToggle) enablePushToggle.checked = !!(this.subscription && this.serverPushAvailable);
+            if (enablePushToggle) enablePushToggle.disabled = !this.serverPushAvailable;
           } else if (state === 'denied') {
             pushDesc.textContent = 'Notifications blocked — open Settings to re-enable';
             if (requestBtn) requestBtn.style.display = 'none';
-            // suggest iOS instructions if on ios
             if (showIOSBtn) {
               showIOSBtn.style.display = isIOS() ? 'inline-block' : 'none';
             }
-            if (enablePushToggle) enablePushToggle.checked = false;
+            if (enablePushToggle) { enablePushToggle.checked = false; enablePushToggle.disabled = false; }
           } else if (state === 'default') {
             pushDesc.textContent = 'Permission not requested yet';
             if (requestBtn) requestBtn.style.display = 'inline-block';
             if (showIOSBtn) showIOSBtn.style.display = isIOS() ? 'inline-block' : 'none';
-            if (enablePushToggle) enablePushToggle.checked = false;
+            if (enablePushToggle) { enablePushToggle.checked = false; enablePushToggle.disabled = false; }
           } else {
             pushDesc.textContent = 'Notifications not supported in this browser';
             if (requestBtn) requestBtn.style.display = 'none';
@@ -252,6 +293,7 @@
             if (enablePushToggle) enablePushToggle.disabled = true;
           }
         }
+
       } catch (e) {
         console.warn('updatePermissionUI error', e);
       }
@@ -261,7 +303,6 @@
       if (!('Notification' in window)) return false;
       if (Notification.permission === 'granted') return true;
 
-      // On iOS, the native permission prompt can be confusing; prefer user-initiated flow
       try {
         const permission = await Notification.requestPermission();
         this.updatePermissionUI();
@@ -274,21 +315,20 @@
 
     async subscribe(force = false) {
       if (!this.registration) {
-        console.warn('Service Worker not registered');
-        return;
+        console.warn('Service Worker not registered - cannot subscribe');
+        return null;
       }
       if (!this.applicationServerKey) {
         console.warn('No applicationServerKey configured; cannot subscribe');
-        return;
+        return null;
       }
 
-      // If permission is denied, don't try
       if (!force && Notification.permission !== 'granted') {
         const ok = await this.requestPermission();
         if (!ok) {
           console.warn('Notification permission denied');
           this.updatePermissionUI();
-          return;
+          return null;
         }
       }
 
@@ -296,7 +336,7 @@
         const existing = await this.registration.pushManager.getSubscription();
         if (existing && !force) {
           this.subscription = existing;
-          await this.postSubscription(existing);
+          await this.postSubscription(existing).catch(()=>{});
           this.updatePermissionUI();
           return existing;
         }
@@ -308,13 +348,14 @@
 
         this.subscription = sub;
         console.info('Push subscribed', sub);
-        await this.postSubscription(sub);
+        await this.postSubscription(sub).catch(()=>{});
         this.updatePermissionUI();
         return sub;
       } catch (err) {
         console.error('Failed to subscribe to push', err);
-        if (window.app && window.app.showToast) window.app.showToast('🔕 Push subscription failed', 'error');
+        if (window.app && typeof window.app.showToast === 'function') window.app.showToast('🔕 Push subscription failed', 'error');
         this.updatePermissionUI();
+        return null;
       }
     },
 
@@ -326,7 +367,7 @@
           this.updatePermissionUI();
           return true;
         }
-        await this.postUnsubscribe(sub);
+        await this.postUnsubscribe(sub).catch(()=>{});
         const ok = await sub.unsubscribe();
         if (ok) {
           this.subscription = null;
@@ -349,7 +390,7 @@
           return;
         }
 
-        const response = await fetch(SUBSCRIBE_ENDPOINT, {
+        const resp = await fetch(SUBSCRIBE_ENDPOINT, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -358,11 +399,11 @@
           body: JSON.stringify({ subscription })
         });
 
-        if (!response.ok) {
-          console.warn('Server did not accept subscription');
-          // if server returns 403 or other, we surface it
-          if (response.status === 403 || response.status === 400) {
-            console.warn('Server rejected push subscription; check server VAPID keys or push endpoint.');
+        if (!resp.ok) {
+          const txt = await resp.text().catch(()=>null);
+          console.warn('Server did not accept subscription', resp.status, txt);
+          if (resp.status === 403 || resp.status === 400 || resp.status === 503) {
+            if (window.app && typeof window.app.showToast === 'function') window.app.showToast('🔕 Server rejected push subscription', 'error');
           }
         } else {
           console.info('Subscription posted to server');
@@ -375,7 +416,7 @@
     async postUnsubscribe(subscription) {
       try {
         const token = localStorage.getItem('sTalk_token');
-        const endpoint = subscription && subscription.endpoint;
+        const endpoint = subscription && (subscription.endpoint || subscription?.toJSON?.()?.endpoint);
         if (!token || !endpoint) return;
         await fetch(UNSUBSCRIBE_ENDPOINT, {
           method: 'POST',
@@ -391,31 +432,24 @@
     }
   };
 
-  // Expose globally
+  // expose
   window.pushClient = pushClient;
 
-  // Auto-init if app already logged in
+  // Auto-init after DOM ready
   document.addEventListener('DOMContentLoaded', () => {
     (async () => {
       try {
-        // init SW and get key (will also setup UI wiring)
         await pushClient.init();
 
-        // if user token present, attempt subscribe automatically but only if permission already granted
+        // If user already logged in and permission granted, attempt subscribe shortly after init
         if (localStorage.getItem('sTalk_token')) {
-          // give app a small delay to finish validateToken
           setTimeout(async () => {
-            if (Notification.permission === 'granted') {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && pushClient.serverPushAvailable) {
               await pushClient.subscribe().catch(()=>{});
             } else {
-              // If default and on iOS, show a CTA in settings instead of auto-requesting
               if (isIOS() && shouldShowIOSInstructions()) {
                 const showBtn = document.getElementById(SHOW_IOS_BTN_ID);
                 if (showBtn) showBtn.style.display = 'inline-block';
-                // Optionally show modal immediately if user not in browser: don't auto show to avoid surprise
-              } else {
-                // For non-iOS or where permissions can be requested, we can try to request once
-                // but prefer user action. So only request if push toggle is checked (handled by UI)
               }
             }
           }, 1200);

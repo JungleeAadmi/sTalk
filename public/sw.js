@@ -8,27 +8,26 @@ const DEFAULT_TITLE = 'sTalk';
 const DEFAULT_ICON = '/android-chrome-192x192.png';
 const DEFAULT_BADGE = '/favicon-16x16.png';
 
-// Install / activate (minimal - no forced precache here)
 self.addEventListener('install', (event) => {
-  // Activate immediately
+  // Activate immediately so the new SW takes control sooner
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  // Claim clients immediately so page can communicate with worker
+  // Take control of uncontrolled clients as soon as activated
   event.waitUntil(self.clients.claim());
 });
 
-// Handle push events
 self.addEventListener('push', (event) => {
   let payload = null;
 
+  // Try parse structured JSON first, fallback to text
   try {
     payload = event.data ? event.data.json() : null;
   } catch (err) {
-    // if not JSON, fallback to plain text
     try {
-      payload = { body: event.data ? event.data.text() : '' };
+      const text = event.data ? event.data.text() : '';
+      payload = { body: text || '' };
     } catch (e) {
       payload = { body: '' };
     }
@@ -36,8 +35,8 @@ self.addEventListener('push', (event) => {
 
   const title = (payload && payload.title) ? payload.title : DEFAULT_TITLE;
 
-  // Ensure data object always exists and contains a url fallback
-  const data = (payload && typeof payload.data === 'object') ? payload.data : {};
+  // Normalize data object (ensure url fallback)
+  const data = (payload && typeof payload.data === 'object') ? Object.assign({}, payload.data) : {};
   if (!data.url && payload && payload.url) data.url = payload.url;
   if (!data.url) data.url = '/';
 
@@ -45,7 +44,7 @@ self.addEventListener('push', (event) => {
     body: (payload && payload.body) || '',
     icon: (payload && payload.icon) || DEFAULT_ICON,
     badge: (payload && payload.badge) || DEFAULT_BADGE,
-    data: data,
+    data: data, // attach useful data (chatId, sender, url, etc.)
     vibrate: (payload && payload.vibrate) ? payload.vibrate : [100, 50, 100],
     renotify: !!(payload && payload.renotify),
     tag: (payload && payload.tag) || undefined,
@@ -58,70 +57,81 @@ self.addEventListener('push', (event) => {
       try {
         await self.registration.showNotification(title, options);
       } catch (e) {
-        // Some environments may restrict notifications; log for debugging
+        // Log but don't throw (some environments block notifications)
         console.error('showNotification error', e);
       }
     })()
   );
 });
 
-// Notification click - focus or open and pass data to client
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+  // Close notification early; we'll navigate/focus after
+  try { event.notification.close(); } catch (e) {}
 
-  const data = event.notification.data || {};
+  // Data attached by push payload (should include url / chatId / sender normally)
+  const data = event.notification && event.notification.data ? event.notification.data : {};
   const openUrl = data.url || '/';
+  const action = event.action || null; // action button id (if any)
 
+  // We'll attempt to focus an existing client in the same origin, post a message to it, and navigate it.
   event.waitUntil(
     (async () => {
       try {
         const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
 
+        // Try to find an existing client from same origin to focus + message
         for (const client of allClients) {
-          // Only consider same-origin clients (defensive)
           try {
-            const clientUrl = client.url || '';
-            if (new URL(clientUrl).origin === self.location.origin) {
-              if (client.focus) await client.focus();
+            // Skip cross-origin clients (guard in case of odd URLs)
+            if (new URL(client.url).origin !== self.location.origin) continue;
 
-              // Let the page handle deep-linking via postMessage
-              try {
-                client.postMessage({ type: 'notification-click', data });
-              } catch (e) {
-                // ignore postMessage failures
-              }
-
-              // Best-effort navigate if supported
-              if (openUrl && client.navigate) {
-                try { await client.navigate(openUrl); } catch (e) { /* ignore */ }
-              }
-              return;
+            // Focus the client if possible
+            if (client.focus) {
+              try { await client.focus(); } catch (e) { /* ignore */ }
             }
+
+            // Post a consistent message shape that app.js expects
+            try {
+              client.postMessage({
+                type: 'notification-click',
+                data: Object.assign({}, data, { action: action, url: openUrl })
+              });
+            } catch (e) { /* ignore postMessage errors */ }
+
+            // If client supports navigate, attempt to navigate to the URL (some browsers support client.navigate)
+            if (openUrl && client.navigate) {
+              try { await client.navigate(openUrl); } catch (e) { /* ignore navigation failure */ }
+            } else {
+              // fallback: opening window (will create new tab if needed)
+              if (clients.openWindow) await clients.openWindow(openUrl);
+            }
+
+            // We handled it for one client so stop
+            return;
           } catch (e) {
-            // ignore malformed client.url
+            // ignore malformed client.url or other client-specific errors and continue
+            continue;
           }
         }
 
-        // No matching client found — open a new window/tab
+        // If no suitable client found, open a new window/tab
         if (clients.openWindow) {
           await clients.openWindow(openUrl);
         }
       } catch (e) {
-        // swallow to avoid unhandled promise rejections
         console.error('notificationclick handler failed', e);
       }
     })()
   );
 });
 
-// Optional: notificationclose
 self.addEventListener('notificationclose', (event) => {
-  // Could be used for analytics or clearing server-side "pending" state
+  // Optional analytics or cleanup could go here.
+  // We intentionally keep this light — the page can handle analytics if needed.
 });
 
-// Handle subscription change (browser may fire when a subscription expires)
+// When the subscription changes (browser refreshed keys), notify clients so page can re-subscribe
 self.addEventListener('pushsubscriptionchange', (event) => {
-  // Notify open clients so they can re-subscribe and update server-side subscription
   event.waitUntil(
     (async () => {
       try {
@@ -129,12 +139,10 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         for (const client of allClients) {
           try {
             client.postMessage({ type: 'pushsubscriptionchange' });
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) { /* ignore per-client errors */ }
         }
       } catch (e) {
-        // ignore
+        // silent
       }
     })()
   );
