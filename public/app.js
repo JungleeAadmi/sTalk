@@ -57,19 +57,40 @@ class STalk {
 
             // Bind lifecycle aliases so other scripts can call these names
             try {
-                window.app.init = this.initializeApp.bind(this);
-                window.app.showMain = this.showMain.bind(this);
-                window.app.showLogin = this.showLogin.bind(this);
-                window.app.connect = this.connectSocket.bind(this);
-                window.app.postLogin = this.postLogin.bind(this);
+                // Defensive binding: only bind if functions exist on the instance; otherwise keep fallback
+                if (typeof this.initializeApp === 'function') {
+                    window.app.init = this.initializeApp.bind(this);
+                }
+                if (typeof this.showMain === 'function') {
+                    window.app.showMain = this.showMain.bind(this);
+                } else if (typeof window.app.showMain !== 'function') {
+                    window.app.showMain = () => {};
+                }
+                if (typeof this.showLogin === 'function') {
+                    window.app.showLogin = this.showLogin.bind(this);
+                }
+                if (typeof this.connectSocket === 'function') {
+                    window.app.connect = this.connectSocket.bind(this);
+                }
+                if (typeof this.postLogin === 'function') {
+                    window.app.postLogin = this.postLogin.bind(this);
+                }
                 // flags
                 window.app.ready = this.ready;
                 window.app.initialized = this.initialized;
             } catch (e) { console.warn('binding aliases failed', e); }
 
-            this.initializeApp();
-            this.setupEventListeners();
-            this.applyTheme(this.currentTheme);
+            // call initialization methods (constructor internal initialization)
+            // These methods are already defined in this class and safe to call here.
+            try {
+                this.initializeApp();
+            } catch (e) { console.warn('initializeApp call failed', e); }
+            try {
+                this.setupEventListeners();
+            } catch (e) { console.warn('setupEventListeners call failed', e); }
+            try {
+                this.applyTheme(this.currentTheme);
+            } catch (e) { console.warn('applyTheme call failed', e); }
 
             // expose SW message handler for index.html forwarding and external calls
             window.app.handleServiceWorkerMessage = this.handleServiceWorkerMessage.bind(this);
@@ -2433,30 +2454,72 @@ class STalk {
     }
 }
 
-// Initialize app when DOM is loaded (kept for compatibility)
-// If something else created window.app already, don't overwrite a full STalk instance
+// ---------------------------
+// Safe, defensive app initialization (REPLACED - fixes .bind() crash)
+// ---------------------------
+
+// When DOM is loaded, create and wire a STalk instance if window.app isn't already a STalk instance.
+// This version is defensive: it only binds lifecycle aliases if the underlying methods exist,
+// and merges non-function properties from any pre-existing window.app object.
 document.addEventListener('DOMContentLoaded', () => {
-    if (!(window.app instanceof STalk)) {
-        console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
-        const instance = new STalk();
-        // if window.app was an object, replace/merge with instance
+    (async () => {
         try {
-            window.app = instance;
-            // alias common lifecycle names for external code expectations
-            window.app.init = instance.initializeApp.bind(instance);
-            window.app.showMain = instance.showMain.bind(instance);
-            window.app.showLogin = instance.showLogin.bind(instance);
-            window.app.connect = instance.connectSocket.bind(instance);
-            window.app.postLogin = instance.postLogin.bind(instance);
-            window.app.ready = instance.ready;
-            window.app.initialized = instance.initialized;
+            if (!(window.app instanceof STalk)) {
+                console.log('🚀 sTalk - Enhanced with media previews, link previews, unread counters, and push/sound controls!');
+                const instance = new STalk();
+
+                // If window.app existed as a plain object (fallbacks from other code), merge plain properties
+                try {
+                    if (window.app && typeof window.app === 'object' && !(window.app instanceof STalk)) {
+                        Object.keys(window.app).forEach((k) => {
+                            try {
+                                // copy only non-function fields that don't exist on the instance
+                                if (typeof window.app[k] !== 'function' && typeof instance[k] === 'undefined') {
+                                    instance[k] = window.app[k];
+                                }
+                            } catch (e) { /* ignore */ }
+                        });
+                    }
+                } catch (e) { console.warn('merge existing app object failed', e); }
+
+                // Expose the created instance as the global app
+                try {
+                    window.app = instance;
+                } catch (e) {
+                    console.warn('error assigning global app instance', e);
+                }
+
+                // Defensive binder helper
+                const bindIfFunction = (alias, methodName) => {
+                    try {
+                        if (typeof instance[methodName] === 'function') {
+                            window.app[alias] = instance[methodName].bind(instance);
+                        } else if (typeof window.app[alias] !== 'function') {
+                            // leave any pre-existing fallback on window.app intact; if none, set a noop
+                            window.app[alias] = () => {};
+                        }
+                    } catch (e) {
+                        window.app[alias] = () => {};
+                    }
+                };
+
+                bindIfFunction('init', 'initializeApp');
+                bindIfFunction('showMain', 'showMain');
+                bindIfFunction('showLogin', 'showLogin');
+                bindIfFunction('connect', 'connectSocket');
+                bindIfFunction('postLogin', 'postLogin');
+
+                // reflect lifecycle flags (safe)
+                try { window.app.ready = !!instance.ready; window.app.initialized = !!instance.initialized; } catch (e) {}
+
+            } else {
+                // already a proper instance - ensure SW handler exists
+                window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage || (() => {});
+            }
         } catch (e) {
-            console.warn('error assigning global app instance', e);
+            console.warn('Initialization wrapper error', e);
         }
-    } else {
-        // ensure handler exists
-        window.app.handleServiceWorkerMessage = window.app.handleServiceWorkerMessage || (() => {});
-    }
+    })();
 });
 
 // Service Worker registration for PWA (if available)
