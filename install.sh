@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 ################################################################################
-# sTalk Installation Script (v3.1.1) - safer edition
+# sTalk Installation Script (v3.1)
 #
-# Full automated installer (safe defaults / non-destructive)
+# Full automated installer:
 # - Detect OS, require root & internet
 # - Install Node.js 20.x and Git
-# - Clone/upgrade sTalk into /opt/sTalk (safe backup if existing)
+# - Clone/upgrade sTalk into /opt/sTalk
 # - Install npm dependencies (production)
-# - Generate VAPID keys (web-push) and store in .vapid.json (600 perms)
+# - Generate VAPID keys (web-push) and store in .vapid.json
 # - Create systemd drop-in with VAPID env vars
-# - Create systemd service (runs as 'stalk' system user), enable & start
+# - Create systemd service, enable & start
 # - Create directories (uploads, profiles, database)
 # - Attempt to fetch server /api/push/key and print public key
 #
 # Usage:
-#   curl -4 -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh -o /tmp/install_safe.sh
-#   less /tmp/install_safe.sh    # inspect
-#   sudo bash /tmp/install_safe.sh
+#   curl -fsSL https://raw.githubusercontent.com/JungleeAadmi/sTalk/main/install.sh | sudo bash
 ################################################################################
 
 set -euo pipefail
@@ -27,21 +25,12 @@ set -euo pipefail
 STALK_DIR="${STALK_DIR:-/opt/sTalk}"
 SERVICE_NAME="${SERVICE_NAME:-stalk}"
 PORT="${PORT:-3000}"
-VAPID_FILE="${VAPID_FILE:-${STALK_DIR}/.vapid.json}"
+VAPID_FILE="${STALK_DIR}/.vapid.json"
 SYSTEMD_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
-SYSTEMD_VAPID_CONF="${SYSTEMD_VAPID_CONF:-${SYSTEMD_DROPIN_DIR}/vapid.conf}"
+SYSTEMD_VAPID_CONF="${SYSTEMD_DROPIN_DIR}/vapid.conf"
 BACKUP_VAPID_TMP="/tmp/stalk_vapid_backup.json"
-REPO_URL="${REPO_URL:-https://github.com/JungleeAadmi/sTalk.git}"
-NODE_SETUP_URL="${NODE_SETUP_URL:-https://deb.nodesource.com/setup_20.x}"
-FORCE_REMOVE="${FORCE_REMOVE:-0}"   # set to 1 to allow destructive rm -rf (not recommended)
-RETRY_COUNT="${RETRY_COUNT:-3}"
-RETRY_SLEEP="${RETRY_SLEEP:-2}"
-
-# -------------------------
-# Environment / safety
-# -------------------------
-export DEBIAN_FRONTEND=noninteractive
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+REPO_URL="https://github.com/JungleeAadmi/sTalk.git"
+NODE_SETUP_URL="https://deb.nodesource.com/setup_20.x"
 
 # -------------------------
 # Colors / logging helpers
@@ -51,25 +40,6 @@ step(){ printf "${BLUE}▶ %s${NC}\n" "$*"; }
 info(){ printf "${YELLOW}ℹ %s${NC}\n" "$*"; }
 ok(){ printf "${GREEN}✓ %s${NC}\n" "$*"; }
 err(){ printf "${RED}✗ %s${NC}\n" "$*"; }
-
-# -------------------------
-# Util: run curl with IPv4 fallback and simple retries
-# -------------------------
-fetch_curl() {
-  # usage: fetch_curl <destfile> <url>
-  local dest="$1"; shift
-  local url="$1"; shift
-  local i=0
-  while [ $i -lt "${RETRY_COUNT}" ]; do
-    if curl -4 -fsSL "$url" -o "$dest"; then
-      return 0
-    fi
-    i=$((i+1))
-    sleep "${RETRY_SLEEP}"
-  done
-  # final try without -4 (allowing IPv6 if env supports)
-  curl -fsSL "$url" -o "$dest"
-}
 
 # -------------------------
 # Pre-checks
@@ -84,7 +54,7 @@ require_root() {
 
 require_internet() {
   step "Checking internet connectivity..."
-  if ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 || ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W2 google.com >/dev/null 2>&1; then
+  if ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W2 google.com >/dev/null 2>&1; then
     ok "Internet reachable"
   else
     err "No internet connectivity detected. Aborting."
@@ -99,23 +69,6 @@ detect_os() {
     ok "Detected: ${PRETTY_NAME:-$NAME}"
   else
     info "Could not read /etc/os-release — proceeding but installer was designed for Debian/Ubuntu."
-  fi
-}
-
-# -------------------------
-# System user
-# -------------------------
-ensure_stalk_user() {
-  if id -u stalk >/dev/null 2>&1; then
-    info "User 'stalk' exists"
-  else
-    step "Creating system user 'stalk'..."
-    # system user without login
-    useradd --system --no-create-home --home-dir "${STALK_DIR}" --shell /usr/sbin/nologin stalk || {
-      err "Failed to create user 'stalk'"
-      exit 1
-    }
-    ok "User 'stalk' created"
   fi
 }
 
@@ -137,11 +90,7 @@ install_nodejs() {
   step "Installing Node.js 20.x LTS..."
   apt-get update -qq
   apt-get install -y -qq curl gnupg2 ca-certificates lsb-release apt-transport-https || apt-get install -y curl gnupg2 ca-certificates lsb-release apt-transport-https
-  # prefer IPv4 for NodeSource script to avoid IPv6-only failures
-  if ! curl -4 -fsSL "${NODE_SETUP_URL}" | bash -; then
-    # fallback without -4 once
-    curl -fsSL "${NODE_SETUP_URL}" | bash -
-  fi
+  curl -fsSL "${NODE_SETUP_URL}" | bash -
   apt-get install -y -qq nodejs || apt-get install -y nodejs
   if command -v node >/dev/null 2>&1; then
       ok "Node installed: $(node -v)"
@@ -158,29 +107,26 @@ install_git() {
     return
   fi
   step "Installing Git..."
-  apt-get update -qq
   apt-get install -y -qq git || apt-get install -y git
   ok "Git installed"
 }
 
 ensure_npm_tools() {
   step "Ensuring web-push helper is available (used to generate VAPID keys)..."
-  # npx is typically available with npm. If web-push not available, install locally in a temp dir
+  # Don't modify package.json permanently; install to node_modules if missing so npx works reliably
   if ! npx --yes web-push --version >/dev/null 2>&1; then
-    TMP_NPM_DIR="$(mktemp -d)"
-    pushd "$TMP_NPM_DIR" >/dev/null 2>&1 || true
-    # try a few times
-    if ! npm install --no-save --silent web-push@latest >/dev/null 2>&1; then
-      info "npm install web-push failed in temp dir; continuing but VAPID generation may fail"
+    # attempt local install (non-fatal)
+    if [ -d "${STALK_DIR}" ] && [ -f "${STALK_DIR}/package.json" ]; then
+      ( cd "${STALK_DIR}" && npm install --no-save --silent web-push ) || true
+    else
+      npm install --no-save --silent web-push || true
     fi
-    popd >/dev/null 2>&1 || true
-    rm -rf "$TMP_NPM_DIR" || true
   fi
-  ok "web-push helper ensured (npx should be available)"
+  ok "web-push helper ensured (npx will be available)"
 }
 
 # -------------------------
-# Clone/app install (safe)
+# Clone/app install
 # -------------------------
 install_stalk() {
   step "Installing sTalk into ${STALK_DIR}..."
@@ -191,22 +137,9 @@ install_stalk() {
     cp -f "${VAPID_FILE}" "${BACKUP_VAPID_TMP}" 2>/dev/null || true
   fi
 
-  # Stop service if present
+  # Stop service, remove old dir (preserve uploads/database via repo layout)
   systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
-
-  # If dir exists, either move to backup or remove if FORCE_REMOVE=1
-  if [ -d "${STALK_DIR}" ]; then
-    if [ "${FORCE_REMOVE}" = "1" ]; then
-      step "FORCE_REMOVE=1 set; removing ${STALK_DIR}"
-      rm -rf "${STALK_DIR}"
-    else
-      TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-      BACKUP_DIR="/tmp/stalk_backup_${TIMESTAMP}"
-      step "Existing install found — moving ${STALK_DIR} -> ${BACKUP_DIR} (safe backup)"
-      mv "${STALK_DIR}" "${BACKUP_DIR}" || { err "Failed to move ${STALK_DIR} to ${BACKUP_DIR}"; exit 1; }
-      ok "Backup created at ${BACKUP_DIR}"
-    fi
-  fi
+  rm -rf "${STALK_DIR}"
 
   # Clone repo
   step "Cloning repository..."
@@ -217,32 +150,25 @@ install_stalk() {
 
   step "Installing production dependencies (npm)..."
   if command -v npm >/dev/null 2>&1; then
-    # try reliable install; allow failures to be visible
-    if ! npm ci --production --prefer-offline --no-audit --silent; then
-      info "npm ci failed; attempting npm install --production"
-      npm install --production --silent || { err "npm install failed"; exit 1; }
-    fi
+    npm ci --production --prefer-offline --no-audit --silent || npm install --production --silent || true
   else
     err "npm not found after Node install"
     exit 1
   fi
-  ok "Dependencies installed"
+  ok "Dependencies installed (or attempted)"
 
-  # Restore VAPID backup if present and missing
+  # Restore VAPID backup if present (move into place)
   if [ -f "${BACKUP_VAPID_TMP}" ] && [ ! -f "${VAPID_FILE}" ]; then
     mv -f "${BACKUP_VAPID_TMP}" "${VAPID_FILE}" || true
     chmod 600 "${VAPID_FILE}" 2>/dev/null || true
-    chown stalk:stalk "${VAPID_FILE}" 2>/dev/null || true
     ok "Restored previous VAPID keys"
   fi
 
-  # Create directories used by app (uploads etc.) and set ownership to stalk
+  # Create directories used by app (uploads etc.)
   mkdir -p "${STALK_DIR}/database" "${STALK_DIR}/uploads/files" "${STALK_DIR}/uploads/images" "${STALK_DIR}/uploads/audio" "${STALK_DIR}/uploads/documents" "${STALK_DIR}/uploads/profiles"
-  chown -R stalk:stalk "${STALK_DIR}" || true
-  find "${STALK_DIR}" -type d -exec chmod 755 {} \; || true
-  # ensure sensitive files are private
-  [ -f "${VAPID_FILE}" ] && chmod 600 "${VAPID_FILE}" && chown stalk:stalk "${VAPID_FILE}" || true
-  ok "Directory structure ensured and ownership set"
+  chmod -R 755 "${STALK_DIR}"
+  [ -f "${VAPID_FILE}" ] && chmod 600 "${VAPID_FILE}" || true
+  ok "Directory structure ensured and permissions set"
 }
 
 # -------------------------
@@ -258,10 +184,11 @@ generate_vapid_and_dropin() {
     info "VAPID file already exists at ${VAPID_FILE}"
   else
     info "Generating VAPID keys (web-push npx)..."
+    # Ensure npx & web-push available
     ensure_npm_tools
+    # Try to generate into file
     if npx --yes web-push generate-vapid-keys --json > "${VAPID_FILE}" 2>/dev/null; then
       chmod 600 "${VAPID_FILE}" 2>/dev/null || true
-      chown stalk:stalk "${VAPID_FILE}" 2>/dev/null || true
       ok "VAPID keys generated and saved to ${VAPID_FILE}"
     else
       err "Failed to generate VAPID keys via npx web-push"
@@ -289,16 +216,15 @@ generate_vapid_and_dropin() {
     return 1
   fi
 
-  # Write systemd drop-in to expose env vars to service (file owned by root, 640)
+  # Write systemd drop-in to expose env vars to service
   mkdir -p "${SYSTEMD_DROPIN_DIR}"
   cat > "${SYSTEMD_VAPID_CONF}" <<EOF
 [Service]
-Environment=VAPID_PUBLIC_KEY=${VAPID_PUBLIC}
-Environment=VAPID_PRIVATE_KEY=${VAPID_PRIVATE}
-Environment=VAPID_SUBJECT=${SUBJECT}
+Environment=VAPID_PUBLIC_KEY="${VAPID_PUBLIC}"
+Environment=VAPID_PRIVATE_KEY="${VAPID_PRIVATE}"
+Environment=VAPID_SUBJECT="${SUBJECT}"
 EOF
-  chmod 640 "${SYSTEMD_VAPID_CONF}"
-  chown root:root "${SYSTEMD_VAPID_CONF}" || true
+  chmod 644 "${SYSTEMD_VAPID_CONF}"
   ok "Wrote systemd drop-in: ${SYSTEMD_VAPID_CONF}"
 
   systemctl daemon-reload || true
@@ -318,8 +244,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=stalk
-Group=stalk
+User=root
 WorkingDirectory=${STALK_DIR}
 ExecStart=/usr/bin/node ${STALK_DIR}/server.js
 Restart=on-failure
@@ -332,29 +257,22 @@ SyslogIdentifier=stalk
 Environment=NODE_ENV=production
 Environment=PORT=${PORT}
 
-# Security hardening
+# Security
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=full
-ProtectHome=yes
-PrivateDevices=yes
-RestrictAddressFamilies=AF_INET AF_INET6
-ReadOnlyPaths=/
-# Allow writing to upload dir only (mask)
-RunFlags= --   # placeholder; custom flags can be added if needed
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable --now "${SERVICE_NAME}" || true
+  systemctl enable "${SERVICE_NAME}" || true
 
-  # Start or restart service (if it was already active)
+  # Start or restart service
   if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
-    info "Service is active (restarted/started by enable --now)"
+    info "Service already running — restarting to pick up changes"
+    systemctl restart "${SERVICE_NAME}" || true
   else
-    info "Service not active — attempting to start"
     systemctl start "${SERVICE_NAME}" || true
   fi
 
@@ -425,7 +343,6 @@ final_message() {
   echo "Default admin credentials: admin / admin"
   echo
   echo "To view service logs: sudo journalctl -u ${SERVICE_NAME} -f"
-  echo "If you moved a previous install, it is available as /tmp/stalk_backup_*"
   echo
 }
 
@@ -440,7 +357,6 @@ main() {
   install_nodejs
   install_git
 
-  ensure_stalk_user
   install_stalk
 
   # generate VAPID keys and configure systemd drop-in
